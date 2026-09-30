@@ -86,6 +86,36 @@ describe('all-in raise reopening rules', () => {
     expect(reraised.events[0]).toMatchObject({ type: 'PLAYER_RAISED', fullRaise: true });
   });
 
+  it('reopens action when cumulative short all-ins equal a full raise', () => {
+    let state = makeState({
+      players: [
+        player({ id: 'alice', seat: 0 }),
+        player({ id: 'bob', seat: 1 }),
+        player({ id: 'carol', seat: 2, stack: 25n }),
+        player({ id: 'dave', seat: 3, stack: 30n }),
+        player({ id: 'erin', seat: 4, stack: 40n }),
+      ],
+    });
+
+    state = reduceBettingAction(state, { type: 'bet', playerId: 'alice', amount: 20n }).state;
+    state = reduceBettingAction(state, { type: 'call', playerId: 'bob' }).state;
+    state = reduceBettingAction(state, { type: 'all-in', playerId: 'carol' }).state;
+    state = reduceBettingAction(state, { type: 'all-in', playerId: 'dave' }).state;
+    state = reduceBettingAction(state, { type: 'all-in', playerId: 'erin' }).state;
+
+    expect(state.currentBet).toBe(40n);
+    expect(state.minimumRaise).toBe(20n);
+    expect(findPlayer(state, 'alice').actedSinceLastFullRaise).toBe(false);
+    expect(findPlayer(state, 'bob').actedSinceLastFullRaise).toBe(false);
+
+    const reraised = reduceBettingAction(state, {
+      type: 'raise',
+      playerId: 'alice',
+      to: 60n,
+    });
+    expect(reraised.state.currentBet).toBe(60n);
+  });
+
   it('treats an all-in below the call as an all-in call, not a raise', () => {
     const state = makeState({
       players: [

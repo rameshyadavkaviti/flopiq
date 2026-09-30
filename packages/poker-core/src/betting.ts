@@ -47,6 +47,17 @@ const applyFullRaise = (
     return { ...player, actedSinceLastFullRaise: false };
   });
 
+const reopenAfterCumulativeShortRaises = (
+  players: readonly MutablePlayer[],
+  newCurrentBet: ChipAmount,
+  fullRaiseSize: ChipAmount,
+): MutablePlayer[] =>
+  players.map((player) => {
+    if (player.folded || player.allIn || !player.actedSinceLastFullRaise) return player;
+    if (newCurrentBet - player.streetCommitted < fullRaiseSize) return player;
+    return { ...player, actedSinceLastFullRaise: false };
+  });
+
 const nextActorSeat = (
   players: readonly MutablePlayer[],
   afterSeat: number,
@@ -244,6 +255,8 @@ export const reduceBettingAction = (
       if (fullRaise) {
         minimumRaise = raiseSize;
         lastFullRaise = raiseSize;
+      } else {
+        players = reopenAfterCumulativeShortRaises(players, toAmount, minimumRaise);
       }
       events.push({
         type: 'PLAYER_RAISED',
