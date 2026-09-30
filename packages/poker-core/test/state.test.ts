@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { assertBettingRoundInvariants } from '../src/invariants.js';
 import { createBettingRoundState } from '../src/state.js';
 
 const basePlayers = () => [
@@ -125,5 +126,72 @@ describe('betting round state', () => {
         lastFullRaise: 20n,
       }),
     ).toThrow(/hand commitment/i);
+  });
+
+  it('returns only states that satisfy the exported invariants', () => {
+    const state = createBettingRoundState({
+      players: basePlayers(),
+      actingSeat: 0,
+      currentBet: 20n,
+      minimumBet: 20n,
+      minimumRaise: 20n,
+      lastFullRaise: 20n,
+    });
+    expect(() => assertBettingRoundInvariants(state)).not.toThrow();
+
+    const unactedPlayers = basePlayers().map((current) => ({
+      ...current,
+      streetCommitted: 0n,
+      handCommitted: 0n,
+    }));
+    expect(() =>
+      createBettingRoundState({
+        players: unactedPlayers,
+        actingSeat: null,
+        currentBet: 0n,
+        minimumBet: 20n,
+        minimumRaise: 20n,
+        lastFullRaise: 20n,
+      }),
+    ).toThrow(/complete round/i);
+
+    const finishedPlayers = basePlayers().map((current) => ({
+      ...current,
+      streetCommitted: 0n,
+      handCommitted: 0n,
+      actedSinceLastFullRaise: true,
+    }));
+    expect(() =>
+      createBettingRoundState({
+        players: finishedPlayers,
+        actingSeat: 0,
+        currentBet: 0n,
+        minimumBet: 20n,
+        minimumRaise: 20n,
+        lastFullRaise: 20n,
+      }),
+    ).toThrow(/active round/i);
+  });
+
+  it.each([
+    { field: 'folded', value: 'false' },
+    { field: 'folded', value: null },
+    { field: 'actedSinceLastFullRaise', value: 1 },
+    { field: 'actedSinceLastFullRaise', value: undefined },
+  ] as const)('rejects nonboolean $field state', ({ field, value }) => {
+    const players = basePlayers();
+    const first = playerAt(players, 0) as unknown as Record<string, unknown>;
+    first[field] = value;
+
+    expect(() =>
+      createBettingRoundState({
+        players,
+        actingSeat: 1,
+        currentBet: 20n,
+        minimumBet: 20n,
+        minimumRaise: 20n,
+        lastFullRaise: 20n,
+      }),
+    ).toThrow(/boolean/i);
   });
 });

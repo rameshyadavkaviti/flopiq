@@ -199,6 +199,38 @@ describe('betting reducer', () => {
     expect(result.events.at(-1)?.type).toBe('BETTING_ROUND_COMPLETE');
   });
 
+  it('completes when the sole player with chips has matched the all-in wager', () => {
+    const state = makeState({
+      players: [
+        player({ id: 'alice', seat: 0, stack: 0n, streetCommitted: 20n, allIn: true }),
+        player({ id: 'bob', seat: 1, stack: 80n, streetCommitted: 20n }),
+        player({ id: 'carol', seat: 2, stack: 80n, streetCommitted: 20n }),
+      ],
+      actingSeat: 2,
+      currentBet: 20n,
+    });
+
+    const result = reduceBettingAction(state, { type: 'fold', playerId: 'carol' });
+    expect(result.state.status).toBe('complete');
+    expect(result.state.actingSeat).toBeNull();
+  });
+
+  it('requires the sole player with chips to act when they still owe CHIP', () => {
+    const state = makeState({
+      players: [
+        player({ id: 'alice', seat: 0, stack: 0n, streetCommitted: 20n, allIn: true }),
+        player({ id: 'bob', seat: 1, stack: 90n, streetCommitted: 10n }),
+        player({ id: 'carol', seat: 2, stack: 80n, streetCommitted: 20n }),
+      ],
+      actingSeat: 2,
+      currentBet: 20n,
+    });
+
+    const result = reduceBettingAction(state, { type: 'fold', playerId: 'carol' });
+    expect(result.state.status).toBe('active');
+    expect(result.state.actingSeat).toBe(1);
+  });
+
   it('rejects malformed and negative action amounts', () => {
     const state = makeState();
     expect(() =>

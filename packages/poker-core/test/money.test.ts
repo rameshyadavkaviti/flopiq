@@ -26,6 +26,13 @@ describe('CHIP amounts', () => {
     expect(() => (chips as (value: unknown) => bigint)(1)).toThrow(/bigint or canonical/i);
   });
 
+  it.each([Number.MAX_SAFE_INTEGER + 2, 1n, { toString: () => '1' }])(
+    'rejects non-string values passed directly to the parser',
+    (value) => {
+      expect(() => (parseChips as (input: unknown) => bigint)(value)).toThrow(/string/i);
+    },
+  );
+
   it('serializes without a floating-point conversion', () => {
     const value = parseChips('9007199254740993123456789');
 

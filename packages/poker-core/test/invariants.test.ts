@@ -47,4 +47,14 @@ describe('betting state invariants', () => {
     const completeWithActor = { ...state, status: 'complete' } as BettingRoundState;
     expect(() => assertBettingRoundInvariants(completeWithActor)).toThrow(/complete round/i);
   });
+
+  it('rejects nonboolean decision flags at the invariant boundary', () => {
+    const state = makeState();
+    const corrupted = {
+      ...state,
+      players: [{ ...state.players[0], folded: 'false' }, ...state.players.slice(1)],
+    } as unknown as BettingRoundState;
+
+    expect(() => assertBettingRoundInvariants(corrupted)).toThrow(/boolean/i);
+  });
 });

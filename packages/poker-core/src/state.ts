@@ -1,4 +1,5 @@
 import { addChips, assertChipAmount, chips, type ChipAmount } from './money.js';
+import { assertBettingRoundInvariants } from './invariants.js';
 
 export interface BettingPlayerState {
   readonly id: string;
@@ -53,6 +54,13 @@ const validatePlayer = (player: BettingPlayerState, currentBet: ChipAmount): voi
   assertChipAmount(player.stack);
   assertChipAmount(player.streetCommitted);
   assertChipAmount(player.handCommitted);
+  if (
+    typeof player.folded !== 'boolean' ||
+    typeof player.allIn !== 'boolean' ||
+    typeof player.actedSinceLastFullRaise !== 'boolean'
+  ) {
+    throw new TypeError('Player decision flags must be boolean values');
+  }
 
   if (player.handCommitted < player.streetCommitted) {
     throw new RangeError('Hand commitment cannot be less than street commitment');
@@ -120,7 +128,7 @@ export const createBettingRoundState = (
     }
   }
 
-  return freezeBettingRoundState({
+  const state = freezeBettingRoundState({
     players,
     actingSeat: input.actingSeat,
     currentBet: input.currentBet,
@@ -131,4 +139,6 @@ export const createBettingRoundState = (
     status: input.actingSeat === null ? 'complete' : 'active',
     totalChips,
   });
+  assertBettingRoundInvariants(state);
+  return state;
 };

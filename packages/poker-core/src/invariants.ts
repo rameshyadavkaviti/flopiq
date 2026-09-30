@@ -15,6 +15,13 @@ const assertPlayer = (player: BettingPlayerState, currentBet: ChipAmount): void 
   assertChipAmount(player.stack);
   assertChipAmount(player.streetCommitted);
   assertChipAmount(player.handCommitted);
+  if (
+    typeof player.folded !== 'boolean' ||
+    typeof player.allIn !== 'boolean' ||
+    typeof player.actedSinceLastFullRaise !== 'boolean'
+  ) {
+    throw new TypeError('Player decision flags must be boolean values');
+  }
   if (player.handCommitted < player.streetCommitted) {
     throw new Error('Hand commitment cannot be less than street commitment');
   }
@@ -45,6 +52,7 @@ export const isBettingRoundComplete = (state: BettingRoundState): boolean => {
 
   const actionable = contenders.filter((player) => !player.allIn);
   if (actionable.length === 0) return true;
+  if (actionable.length === 1) return actionable[0]?.streetCommitted === state.currentBet;
 
   return actionable.every(
     (player) =>

@@ -12,6 +12,9 @@ export function assertChipAmount(value: unknown): asserts value is ChipAmount {
 }
 
 export const parseChips = (value: string): ChipAmount => {
+  if (typeof value !== 'string') {
+    throw new TypeError('CHIP parser requires a string');
+  }
   if (!CANONICAL_CHIP_PATTERN.test(value)) {
     throw new TypeError('CHIP string must use canonical nonnegative decimal form');
   }

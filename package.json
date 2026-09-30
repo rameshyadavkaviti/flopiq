@@ -10,7 +10,7 @@
   },
   "scripts": {
     "lint": "eslint .",
-    "test": "vitest run --passWithNoTests",
+    "test": "vitest run",
     "typecheck": "tsc --project packages/poker-core/tsconfig.json --noEmit"
   },
   "devDependencies": {
