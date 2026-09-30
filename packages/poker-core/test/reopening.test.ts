@@ -116,6 +116,92 @@ describe('all-in raise reopening rules', () => {
     expect(reraised.state.currentBet).toBe(60n);
   });
 
+  it('calculates cumulative short-all-in reopening rights per player', () => {
+    let state = makeState({
+      players: [
+        player({
+          id: 'alice',
+          seat: 0,
+          streetCommitted: 20n,
+          actedSinceLastFullRaise: true,
+        }),
+        player({ id: 'dave', seat: 1, stack: 30n }),
+        player({ id: 'erin', seat: 2, stack: 40n }),
+        player({
+          id: 'bob',
+          seat: 3,
+          streetCommitted: 20n,
+          actedSinceLastFullRaise: true,
+        }),
+        player({ id: 'carol', seat: 4, stack: 0n, streetCommitted: 25n }),
+      ],
+      currentBet: 25n,
+    });
+
+    state = reduceBettingAction(state, { type: 'call', playerId: 'alice' }).state;
+    state = reduceBettingAction(state, { type: 'all-in', playerId: 'dave' }).state;
+    state = reduceBettingAction(state, { type: 'all-in', playerId: 'erin' }).state;
+
+    expect(state.currentBet).toBe(40n);
+    expect(state.minimumRaise).toBe(20n);
+    expect(findPlayer(state, 'alice').streetCommitted).toBe(25n);
+    expect(findPlayer(state, 'alice').actedSinceLastFullRaise).toBe(true);
+    expect(findPlayer(state, 'bob').streetCommitted).toBe(20n);
+    expect(findPlayer(state, 'bob').actedSinceLastFullRaise).toBe(false);
+
+    const bobRaises = reduceBettingAction(state, {
+      type: 'raise',
+      playerId: 'bob',
+      to: 60n,
+    });
+    expect(bobRaises.state.currentBet).toBe(60n);
+
+    const bobCalls = reduceBettingAction(state, { type: 'call', playerId: 'bob' });
+    expect(bobCalls.state.actingSeat).toBe(0);
+    expect(() =>
+      reduceBettingAction(bobCalls.state, {
+        type: 'raise',
+        playerId: 'alice',
+        to: 60n,
+      }),
+    ).toThrow(/not reopened/i);
+  });
+
+  it('keeps raising open for an unacted player after a short all-in', () => {
+    let state = makeState({
+      players: [
+        player({ id: 'alice', seat: 0 }),
+        player({ id: 'bob', seat: 1 }),
+        player({ id: 'carol', seat: 2, stack: 25n }),
+        player({ id: 'dave', seat: 3 }),
+      ],
+    });
+
+    state = reduceBettingAction(state, { type: 'bet', playerId: 'alice', amount: 20n }).state;
+    state = reduceBettingAction(state, { type: 'call', playerId: 'bob' }).state;
+    state = reduceBettingAction(state, { type: 'all-in', playerId: 'carol' }).state;
+
+    expect(findPlayer(state, 'alice').actedSinceLastFullRaise).toBe(true);
+    expect(findPlayer(state, 'dave').actedSinceLastFullRaise).toBe(false);
+
+    const daveRaises = reduceBettingAction(state, {
+      type: 'raise',
+      playerId: 'dave',
+      to: 45n,
+    });
+    expect(daveRaises.state.currentBet).toBe(45n);
+
+    const daveCalls = reduceBettingAction(state, { type: 'call', playerId: 'dave' });
+    expect(daveCalls.state.actingSeat).toBe(0);
+    expect(() =>
+      reduceBettingAction(daveCalls.state, {
+        type: 'raise',
+        playerId: 'alice',
+        to: 45n,
+      }),
+    ).toThrow(/not reopened/i);
+  });
+
   it('treats an all-in below the call as an all-in call, not a raise', () => {
     const state = makeState({
       players: [
@@ -160,6 +246,43 @@ describe('all-in raise reopening rules', () => {
       playerId: 'alice',
       seat: 0,
       amount: 12n,
+    });
+  });
+
+  it('preserves the full minimum raise after a short opening all-in', () => {
+    const opened = reduceBettingAction(
+      makeState({
+        players: [
+          player({ id: 'alice', seat: 0, stack: 12n }),
+          player({ id: 'bob', seat: 1 }),
+          player({ id: 'carol', seat: 2 }),
+        ],
+      }),
+      { type: 'all-in', playerId: 'alice' },
+    );
+
+    expect(opened.state.currentBet).toBe(12n);
+    expect(opened.state.minimumRaise).toBe(20n);
+    expect(opened.state.lastFullRaise).toBe(20n);
+    expect(() =>
+      reduceBettingAction(opened.state, {
+        type: 'raise',
+        playerId: 'bob',
+        to: 31n,
+      }),
+    ).toThrow(/below the minimum raise/i);
+
+    const raised = reduceBettingAction(opened.state, {
+      type: 'raise',
+      playerId: 'bob',
+      to: 32n,
+    });
+    expect(raised.state.currentBet).toBe(32n);
+    expect(raised.state.minimumRaise).toBe(20n);
+    expect(raised.events[0]).toMatchObject({
+      type: 'PLAYER_RAISED',
+      raiseSize: 20n,
+      fullRaise: true,
     });
   });
 });
