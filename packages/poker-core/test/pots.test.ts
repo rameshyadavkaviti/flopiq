@@ -183,6 +183,71 @@ describe('deterministic pot construction', () => {
     expect(result.pots[0]?.eligiblePlayerIds).toEqual(['alice']);
   });
 
+  it('merges adjacent layers when only folded contributors change', () => {
+    const result = constructPots([
+      participant('alice', 0, 1n, true),
+      participant('bob', 1, 2n, true),
+      participant('carol', 2, 3n),
+      participant('dave', 3, 3n),
+      participant('erin', 4, 3n),
+    ]);
+
+    expect(result).toEqual({
+      pots: [
+        {
+          index: 0,
+          type: 'main',
+          amount: 12n,
+          contributorIds: ['alice', 'bob', 'carol', 'dave', 'erin'],
+          eligiblePlayerIds: ['carol', 'dave', 'erin'],
+        },
+      ],
+      uncalled: [],
+    });
+  });
+
+  it('keeps a side pot when live eligibility changes after merged layers', () => {
+    const result = constructPots([
+      participant('alice', 0, 1n, true),
+      participant('bob', 1, 2n),
+      participant('carol', 2, 3n),
+      participant('dave', 3, 3n),
+    ]);
+
+    expect(result.pots).toEqual([
+      {
+        index: 0,
+        type: 'main',
+        amount: 7n,
+        contributorIds: ['alice', 'bob', 'carol', 'dave'],
+        eligiblePlayerIds: ['bob', 'carol', 'dave'],
+      },
+      {
+        index: 1,
+        type: 'side',
+        amount: 2n,
+        contributorIds: ['carol', 'dave'],
+        eligiblePlayerIds: ['carol', 'dave'],
+      },
+    ]);
+  });
+
+  it('keeps merged output canonical and conserves CHIP regardless of input order', () => {
+    const players = [
+      participant('alice', 0, 1n, true),
+      participant('bob', 1, 2n, true),
+      participant('carol', 2, 3n),
+      participant('dave', 3, 3n),
+      participant('erin', 4, 3n),
+    ];
+
+    const result = constructPots(players);
+
+    expect(constructPots([...players].reverse())).toEqual(result);
+    expect(totalConstructed(result)).toBe(totalCommitments(players));
+    expect(() => assertPotConstructionInvariants(players, result)).not.toThrow();
+  });
+
   it('represents uncalled excess explicitly instead of creating a one-player pot', () => {
     const result = constructPots([
       participant('alice', 0, 100n),
