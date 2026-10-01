@@ -161,23 +161,14 @@ describe('deterministic pot construction', () => {
     expect(result.pots.map((pot) => pot.amount)).toEqual([200n, 150n, 200n]);
   });
 
-  it('returns unmatched CHIP to a uniquely largest folded contributor', () => {
-    const result = constructPots([
-      participant('alice', 0, 100n),
-      participant('bob', 1, 100n),
-      participant('carol', 2, 500n, true),
-    ]);
-
-    expect(result.pots).toEqual([
-      {
-        index: 0,
-        type: 'main',
-        amount: 300n,
-        contributorIds: ['alice', 'bob', 'carol'],
-        eligiblePlayerIds: ['alice', 'bob'],
-      },
-    ]);
-    expect(result.uncalled).toEqual([{ playerId: 'carol', seat: 2, amount: 400n }]);
+  it('rejects unmatched CHIP belonging to a folded sole contributor', () => {
+    expect(() =>
+      constructPots([
+        participant('alice', 0, 100n),
+        participant('bob', 1, 100n),
+        participant('carol', 2, 500n, true),
+      ]),
+    ).toThrow(/folded player cannot receive uncalled/i);
   });
 
   it('keeps several folded contributions while retaining only live eligibility', () => {

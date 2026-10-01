@@ -106,6 +106,9 @@ const buildPotConstruction = (
     if (contributors.length === 1) {
       const contributor = contributors[0];
       if (contributor === undefined) throw new Error('Uncalled contributor disappeared');
+      if (contributor.folded) {
+        throw new Error('Folded player cannot receive uncalled CHIP');
+      }
       uncalled.push({
         playerId: contributor.id,
         seat: contributor.seat,
