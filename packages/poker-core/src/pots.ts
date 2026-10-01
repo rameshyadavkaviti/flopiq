@@ -86,6 +86,9 @@ const freezeResult = (result: PotConstructionResult): PotConstructionResult =>
     uncalled: Object.freeze(result.uncalled.map((refund) => Object.freeze({ ...refund }))),
   });
 
+const sameStrings = (left: readonly string[], right: readonly string[]): boolean =>
+  left.length === right.length && left.every((value, index) => value === right[index]);
+
 const buildPotConstruction = (
   players: readonly PotParticipant[],
 ): PotConstructionResult => {
@@ -123,22 +126,37 @@ const buildPotConstruction = (
       throw new Error('Pot layer has contributors but no eligible player');
     }
 
-    const index = pots.length;
-    pots.push({
-      index,
-      type: index === 0 ? 'main' : 'side',
-      amount: layerWidth * BigInt(contributors.length),
-      contributorIds: contributors.map((player) => player.id),
-      eligiblePlayerIds: eligiblePlayers.map((player) => player.id),
-    });
+    const layerAmount = layerWidth * BigInt(contributors.length);
+    const contributorIds = contributors.map((player) => player.id);
+    const eligiblePlayerIds = eligiblePlayers.map((player) => player.id);
+    const previousPot = pots.at(-1);
+
+    if (previousPot !== undefined && sameStrings(previousPot.eligiblePlayerIds, eligiblePlayerIds)) {
+      pots[previousPot.index] = {
+        ...previousPot,
+        amount: addChips(previousPot.amount, layerAmount),
+        contributorIds: [
+          ...previousPot.contributorIds,
+          ...contributorIds.filter(
+            (playerId) => !previousPot.contributorIds.includes(playerId),
+          ),
+        ],
+      };
+    } else {
+      const index = pots.length;
+      pots.push({
+        index,
+        type: index === 0 ? 'main' : 'side',
+        amount: layerAmount,
+        contributorIds,
+        eligiblePlayerIds,
+      });
+    }
     previousLevel = commitmentLevel;
   }
 
   return freezeResult({ pots, uncalled });
 };
-
-const sameStrings = (left: readonly string[], right: readonly string[]): boolean =>
-  left.length === right.length && left.every((value, index) => value === right[index]);
 
 const sameConstruction = (
   left: PotConstructionResult,
