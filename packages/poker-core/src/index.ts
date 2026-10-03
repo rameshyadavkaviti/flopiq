@@ -1,5 +1,7 @@
 export * from './actions.js';
 export * from './betting.js';
+export * from './cards.js';
+export * from './dealer.js';
 export * from './events.js';
 export * from './invariants.js';
 export * from './money.js';
