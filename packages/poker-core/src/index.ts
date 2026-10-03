@@ -3,6 +3,7 @@ export * from './betting.js';
 export * from './cards.js';
 export * from './dealer.js';
 export * from './events.js';
+export * from './hand-ranking.js';
 export * from './invariants.js';
 export * from './money.js';
 export * from './pots.js';
