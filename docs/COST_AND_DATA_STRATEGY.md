@@ -502,15 +502,33 @@ A provider change should be an operations task, not an application rewrite.
 
 ## 20. Current Recommended Development Direction
 
-For the next implementation phases:
+The approved implementation order is now:
 
-- keep the deterministic Poker Core independent of infrastructure,
-- use PostgreSQL as the only required application database,
-- do not require Redis yet,
-- model hand storage as compact canonical events rather than snapshots,
-- make archive storage an interface so an S3-compatible backend can be added later,
-- use one inexpensive external test server only when local development becomes inconvenient,
-- postpone three separately hosted MPC nodes until integration/security testing,
-- require full MPC separation before real-money production.
+```text
+1. Small Playable Prototype
+2. Soroban
+3. Wallet + Stellar CHIP
+4. Minimal Database
+5. MPC
+6. Bind MPC + Poker + Settlement
+7. First Product Version
+```
 
-This keeps early infrastructure close to zero cost without creating an expensive migration later.
+This is an execution-order change, not a relaxation of the production architecture or data/security rules in this document.
+
+For the current prototype phase:
+
+- keep Poker Core independent of infrastructure,
+- use the deterministic local Dealer boundary instead of production MPC,
+- do not add PostgreSQL, Redis, wallet, or production hosting merely for completeness,
+- preserve replayability and canonical inputs so persistence can be added without rewriting Poker Core.
+
+When the Minimal Database phase begins:
+
+- PostgreSQL is the only required application database,
+- Redis remains optional,
+- persist canonical facts/actions rather than repeated snapshots,
+- keep archive storage behind a portable interface,
+- introduce external infrastructure only when the phase or measured operational need requires it.
+
+Cost optimization must never weaken CHIP conservation, custody, settlement authorization, card privacy, MPC separation, auditability, or recovery guarantees.
