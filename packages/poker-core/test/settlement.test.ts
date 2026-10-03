@@ -202,9 +202,11 @@ describe('deterministic pot awarding', () => {
       settlePotAwards(players, construction, winners([0, ['alice']]), 8),
     ).toThrow(/button seat/i);
 
+    const firstPot = construction.pots[0];
+    if (firstPot === undefined) throw new Error('Expected a constructed pot');
     const corrupted = {
       ...construction,
-      pots: [{ ...construction.pots[0], amount: 19n }],
+      pots: [{ ...firstPot, amount: 19n }],
     };
 
     expect(() =>
