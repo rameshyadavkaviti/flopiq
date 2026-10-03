@@ -182,6 +182,12 @@ importers:
         specifier: 5.0.2
         version: 5.0.2(vite@8.3.1)
 
+  apps/local-table:
+    dependencies:
+      '@flopiq/poker-core':
+        specifier: workspace:*
+        version: link:../../packages/poker-core
+
   packages/poker-core: {}
 
 packages:
