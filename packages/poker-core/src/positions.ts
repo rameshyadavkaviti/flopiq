@@ -34,6 +34,17 @@ const requireOccupiedSeat = (occupiedSeats: readonly number[], seat: number): vo
   }
 };
 
+const firstOccupiedSeat = (occupiedSeats: readonly number[]): number => {
+  const first = occupiedSeats[0];
+  if (first === undefined) throw new Error('At least one occupied seat is required');
+  return first;
+};
+
+const nextFromNormalizedSeats = (
+  occupiedSeats: readonly number[],
+  afterSeat: number,
+): number => occupiedSeats.find((seat) => seat > afterSeat) ?? firstOccupiedSeat(occupiedSeats);
+
 export const nextOccupiedSeat = (
   occupiedSeats: readonly number[],
   afterSeat: number,
@@ -43,7 +54,7 @@ export const nextOccupiedSeat = (
     throw new Error('Reference seat must be an integer between 0 and 8');
   }
 
-  return seats.find((seat) => seat > afterSeat) ?? seats[0]!;
+  return nextFromNormalizedSeats(seats, afterSeat);
 };
 
 export const nextButtonSeat = (
@@ -52,7 +63,7 @@ export const nextButtonSeat = (
 ): number => {
   const seats = normalizeOccupiedSeats(occupiedSeats);
   requireOccupiedSeat(seats, currentButtonSeat);
-  return seats.find((seat) => seat > currentButtonSeat) ?? seats[0]!;
+  return nextFromNormalizedSeats(seats, currentButtonSeat);
 };
 
 export const assignHandPositions = (
@@ -63,7 +74,7 @@ export const assignHandPositions = (
   requireOccupiedSeat(seats, buttonSeat);
 
   if (seats.length === 2) {
-    const bigBlindSeat = seats.find((seat) => seat !== buttonSeat)!;
+    const bigBlindSeat = nextFromNormalizedSeats(seats, buttonSeat);
     return Object.freeze({
       buttonSeat,
       smallBlindSeat: buttonSeat,
@@ -73,9 +84,9 @@ export const assignHandPositions = (
     });
   }
 
-  const smallBlindSeat = seats.find((seat) => seat > buttonSeat) ?? seats[0]!;
-  const bigBlindSeat = seats.find((seat) => seat > smallBlindSeat) ?? seats[0]!;
-  const preflopFirstSeat = seats.find((seat) => seat > bigBlindSeat) ?? seats[0]!;
+  const smallBlindSeat = nextFromNormalizedSeats(seats, buttonSeat);
+  const bigBlindSeat = nextFromNormalizedSeats(seats, smallBlindSeat);
+  const preflopFirstSeat = nextFromNormalizedSeats(seats, bigBlindSeat);
   const postflopFirstSeat = smallBlindSeat;
 
   return Object.freeze({
