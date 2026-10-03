@@ -9,6 +9,7 @@ export * from './money.js';
 export * from './pots.js';
 export * from './positions.js';
 export * from './preflop.js';
+export * from './showdown.js';
 export * from './state.js';
 export * from './streets.js';
 export * from './terminal-fold.js';
