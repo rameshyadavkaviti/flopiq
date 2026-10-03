@@ -137,4 +137,34 @@ describe('Texas Hold’em hand ranking', () => {
       ]),
     ).toThrow(/two/i);
   });
+
+  it('rejects sparse and impossible public hand-rank vectors', () => {
+    const sparse = Array<number>(1);
+    const validStraightFlush = { category: 'straight-flush', tiebreak: [14] } as const;
+
+    expect(() =>
+      compareHandRanks(
+        { category: 'straight-flush', tiebreak: sparse },
+        { category: 'four-of-a-kind', tiebreak: [14, 13] },
+      ),
+    ).toThrow(/tiebreak/i);
+    expect(() =>
+      compareHandRanks(
+        { category: 'straight-flush', tiebreak: sparse },
+        validStraightFlush,
+      ),
+    ).toThrow(/tiebreak/i);
+    expect(() =>
+      compareHandRanks(
+        { category: 'straight', tiebreak: [2] },
+        { category: 'three-of-a-kind', tiebreak: [14, 13, 12] },
+      ),
+    ).toThrow(/tiebreak/i);
+    expect(() =>
+      compareHandRanks(
+        { category: 'one-pair', tiebreak: [14, 14, 13, 12] },
+        { category: 'one-pair', tiebreak: [13, 14, 12, 11] },
+      ),
+    ).toThrow(/tiebreak/i);
+  });
 });

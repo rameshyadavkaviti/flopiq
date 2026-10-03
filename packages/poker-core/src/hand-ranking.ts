@@ -123,14 +123,57 @@ const evaluateFiveCards = (cards: readonly [Card, Card, Card, Card, Card]): Hand
 };
 
 const assertHandRank = (rank: HandRank): void => {
-  if (typeof rank !== 'object' || rank === null || !(rank.category in categoryStrength)) {
+  if (
+    typeof rank !== 'object' ||
+    rank === null ||
+    !Object.prototype.hasOwnProperty.call(categoryStrength, rank.category)
+  ) {
     throw new TypeError('Hand rank has an unknown category');
   }
   if (!Array.isArray(rank.tiebreak) || rank.tiebreak.length !== expectedTiebreakLength[rank.category]) {
     throw new Error('Hand rank has an invalid tiebreak vector');
   }
-  if (!rank.tiebreak.every((value) => Number.isInteger(value) && value >= 2 && value <= 14)) {
-    throw new Error('Hand rank tiebreak values must be card ranks');
+
+  const values: number[] = [];
+  for (let index = 0; index < rank.tiebreak.length; index += 1) {
+    const value = rank.tiebreak[index];
+    if (value === undefined || !Number.isInteger(value) || value < 2 || value > 14) {
+      throw new Error('Hand rank has an invalid tiebreak vector');
+    }
+    values.push(value);
+  }
+  if (new Set(values).size !== values.length) {
+    throw new Error('Hand rank has an invalid tiebreak vector');
+  }
+
+  const descending = (input: readonly number[]): boolean =>
+    input.every((value, index) => index === 0 || value < (input[index - 1] ?? value));
+  const high = values[0];
+  let canonical = true;
+  switch (rank.category) {
+    case 'high-card':
+    case 'flush':
+      canonical = descending(values) && straightHighCard(values) === null;
+      break;
+    case 'one-pair':
+      canonical = descending(values.slice(1));
+      break;
+    case 'two-pair':
+      canonical = values[0] !== undefined && values[1] !== undefined && values[0] > values[1];
+      break;
+    case 'three-of-a-kind':
+      canonical = descending(values.slice(1));
+      break;
+    case 'straight':
+    case 'straight-flush':
+      canonical = high !== undefined && high >= 5;
+      break;
+    case 'full-house':
+    case 'four-of-a-kind':
+      break;
+  }
+  if (!canonical) {
+    throw new Error('Hand rank has an invalid tiebreak vector');
   }
 };
 
