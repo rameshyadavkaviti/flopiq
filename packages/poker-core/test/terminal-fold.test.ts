@@ -89,8 +89,8 @@ describe('terminal-fold resolution', () => {
 
   it('is deterministic by seat and does not mutate caller input', () => {
     const input = [
-      player('bob', 8, 80n, 20n, true),
-      player('alice', 2, 90n, 10n, false),
+      player('bob', 8, 90n, 10n, true),
+      player('alice', 2, 80n, 20n, false),
     ];
     const snapshot = input.map((entry) => ({ ...entry }));
 
