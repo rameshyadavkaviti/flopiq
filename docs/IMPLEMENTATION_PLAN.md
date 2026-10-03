@@ -160,6 +160,17 @@ During this phase, a deterministic/test fairness digest may stand in for the lat
 
 Contract tests precede testnet/mainnet deployment.
 
+### Phase 2 repository foundation
+
+The repository contains:
+
+- `contracts/Cargo.toml` — isolated Rust workspace,
+- `contracts/README.md` — workspace rules and planned contract boundaries,
+- `docs/SOROBAN_ARCHITECTURE.md` — custody/contract/security boundaries,
+- `docs/SETTLEMENT_PROTOCOL.md` — canonical completed-hand settlement payload and invariants.
+
+These files are the source of truth for the first Soroban implementation slices. They intentionally contain no production financial contract logic yet.
+
 ---
 
 ## 4. Phase 3 — Wallet + Stellar CHIP
@@ -319,4 +330,16 @@ Parallel agents must not knowingly modify the same branch/PR or overlapping impl
 
 Phase 1 has reached its approved completion condition: a full heads-up hand can be executed and verified end-to-end through settlement and the next-hand transition using the local development harness.
 
-The next roadmap phase is **Phase 2 — Soroban**. Do not start Phase 2 from a Phase 1 complementary task unless that new phase has been explicitly assigned. Before any Soroban implementation, re-check current `main`, active branches/PRs, and the contract/security requirements in this document and `ARCHITECTURE.md`.
+The next roadmap phase is **Phase 2 — Soroban**.
+
+The repository boundary is prepared. The first implementation slice should be **Phase 2A: freeze concrete settlement types and create the first bounded Soroban contract crate(s)** from the approved protocol documents.
+
+Before implementation:
+
+1. inspect current `main`, open PRs, and CI,
+2. read `docs/SOROBAN_ARCHITECTURE.md` and `docs/SETTLEMENT_PROTOCOL.md`,
+3. verify the then-current Stellar CLI, Soroban SDK, and target network protocol,
+4. keep Poker Core unchanged unless a genuine protocol contradiction is discovered,
+5. use local contract tests before any network deployment.
+
+Do not jump directly to production CHIP, wallet, MPC, or mainnet integration.
