@@ -23,8 +23,8 @@ const player = (
 describe('terminal-fold resolution', () => {
   it('awards a heads-up pot to the sole surviving player', () => {
     const input = [
-      player('alice', 0, 90n, 10n, false),
-      player('bob', 1, 80n, 20n, true),
+      player('alice', 0, 80n, 20n, false),
+      player('bob', 1, 90n, 10n, true),
     ];
 
     const result = resolveTerminalFold(input);
@@ -36,17 +36,17 @@ describe('terminal-fold resolution', () => {
       {
         playerId: 'alice',
         seat: 0,
-        startingStack: 90n,
+        startingStack: 80n,
         potAward: 20n,
-        uncalledRefund: 0n,
+        uncalledRefund: 10n,
         endingStack: 110n,
       },
       {
         playerId: 'bob',
         seat: 1,
-        startingStack: 80n,
+        startingStack: 90n,
         potAward: 0n,
-        uncalledRefund: 10n,
+        uncalledRefund: 0n,
         endingStack: 90n,
       },
     ]);
