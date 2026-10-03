@@ -1,0 +1,6 @@
+[workspace]
+resolver = "2"
+members = []
+
+# Phase 2 intentionally starts with an empty Rust workspace.
+# Add contract crates only as bounded, reviewed implementation slices.
