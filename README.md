@@ -2,24 +2,65 @@
 
 Flopiq is a Stellar-based No-Limit Texas Hold'em cash-game platform.
 
-The project is currently in **Phase 1 — Small Playable Prototype**. The immediate goal is the smallest genuinely playable two-player hand from start to finish while keeping Poker Core authoritative, deterministic, infrastructure-independent, and suitable for the later production architecture.
+The project is currently in **Phase 1 — Small Playable Prototype**. The prototype keeps Poker Core authoritative, deterministic, infrastructure-independent, and ready for the later production architecture.
 
-## Current prototype foundation
+## Current prototype
 
-The repository currently includes deterministic Poker Core primitives for:
+The repository now includes:
 
-- integer-only CHIP accounting and invariants,
-- betting actions and no-limit raise/all-in rules,
+- integer-only `bigint` CHIP accounting and conservation invariants,
+- no-limit betting actions, minimum raises, and all-in reopening rules,
 - main/side-pot construction,
-- table positions and heads-up action order,
+- deterministic positions and heads-up action order,
 - forced SB/BB preflop initialization,
-- street progression,
+- flop/turn/river street progression,
 - a replaceable deterministic local dealer,
-- Texas Hold'em hand ranking.
+- seven-card Texas Hold'em hand ranking,
+- terminal-fold and showdown winner resolution,
+- split-pot and odd-CHIP payout allocation,
+- complete hand lifecycle through settlement,
+- deterministic next-hand/button progression,
+- a thin two-player local playable adapter.
 
-The next prototype work is to connect these primitives into winner resolution, pot awarding, complete hand lifecycle, and end-to-end heads-up hand tests.
+Poker Core does not depend on the local dealer. The adapter explicitly coordinates dealer street transitions and supplies evaluated showdown ranks back to Poker Core, so the prototype dealer can later be replaced by the approved MPC/fairness layer without moving poker-rule authority.
 
-Production networking, wallet integration, Stellar/Soroban settlement, persistence, MPC, and polished UI are intentionally deferred until their roadmap phase.
+## Run the local prototype
+
+Requirements:
+
+- Node.js 24
+- pnpm 12
+
+Install and verify:
+
+```bash
+pnpm install
+pnpm typecheck
+pnpm lint
+pnpm test
+```
+
+Start the deterministic two-player terminal table:
+
+```bash
+pnpm play:local
+```
+
+Supported player commands are:
+
+```text
+fold
+check
+call
+bet 20
+raise 40
+all-in
+cards
+next
+quit
+```
+
+The local adapter intentionally uses explicit deterministic decks. It is a Phase 1 development harness, not production randomness, networking, privacy, wallet, or settlement infrastructure.
 
 ## Approved build order
 
@@ -31,20 +72,6 @@ Production networking, wallet integration, Stellar/Soroban settlement, persisten
 6. Bind MPC + Poker + Settlement
 7. First Product Version
 
-This order changes **implementation sequence**, not the approved production security architecture. Surrounding infrastructure may be simplified or deferred to reach a playable product faster, but Poker Core correctness, financial invariants, and architectural boundaries must not be compromised.
-
-## Requirements
-
-- Node.js 24
-- pnpm 12
-
-## Development
-
-```bash
-pnpm install
-pnpm test
-pnpm typecheck
-pnpm lint
-```
+This order changes **implementation sequence**, not the approved production security architecture. Production networking, wallet integration, Stellar/Soroban settlement, persistence, MPC, and polished UI remain deferred until their roadmap phase.
 
 Architecture, implementation order, security constraints, and cost/data strategy are documented in [`docs/`](docs/).

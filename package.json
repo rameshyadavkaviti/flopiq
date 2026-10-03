@@ -11,7 +11,8 @@
   "scripts": {
     "lint": "eslint .",
     "test": "vitest run",
-    "typecheck": "tsc --project packages/poker-core/tsconfig.json --noEmit"
+    "typecheck": "tsc --project packages/poker-core/tsconfig.json --noEmit && tsc --project apps/local-table/tsconfig.json --noEmit",
+    "play:local": "pnpm --filter @flopiq/local-table play"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
