@@ -200,6 +200,48 @@ describe('hand lifecycle', () => {
     expect(hand.completion.settlement.totalChips).toBe(200n);
   });
 
+  it('carries multiple all-ins through showdown and settles main and side pots', () => {
+    let hand = createHand({
+      players: [
+        { id: 'alice', seat: 0, stack: 50n },
+        { id: 'bob', seat: 1, stack: 100n },
+        { id: 'carol', seat: 2, stack: 100n },
+      ],
+      buttonSeat: 2,
+      smallBlind: 5n,
+      bigBlind: 10n,
+    });
+
+    hand = reduceHandAction(hand, { type: 'all-in', playerId: 'carol' }).state;
+    hand = reduceHandAction(hand, { type: 'call', playerId: 'alice' }).state;
+    hand = reduceHandAction(hand, { type: 'call', playerId: 'bob' }).state;
+
+    expect(hand.phase).toBe('awaiting-next-street');
+    hand = advanceHandAfterDeal(hand, 'flop');
+    hand = advanceHandAfterDeal(hand, 'turn');
+    hand = advanceHandAfterDeal(hand, 'river');
+
+    hand = resolveHandShowdown(hand, [
+      { playerId: 'carol', rank: rank('one-pair', [14, 13, 12, 11]) },
+      { playerId: 'alice', rank: rank('straight-flush', [9]) },
+      { playerId: 'bob', rank: rank('straight', [10]) },
+    ]);
+
+    expect(hand.completion?.type).toBe('showdown');
+    if (hand.completion?.type !== 'showdown') throw new Error('Expected showdown completion');
+    expect(hand.completion.winners).toEqual([
+      { potIndex: 0, winnerIds: ['alice'] },
+      { potIndex: 1, winnerIds: ['bob'] },
+    ]);
+    expect(hand.completion.settlement.pots.map((pot) => pot.amount)).toEqual([150n, 100n]);
+    expect(hand.completion.settlement.players.map((player) => player.endingStack)).toEqual([
+      150n,
+      100n,
+      0n,
+    ]);
+    expect(hand.completion.settlement.totalChips).toBe(250n);
+  });
+
   it('keeps dealer progression explicit and rejects out-of-order lifecycle transitions', () => {
     let hand = startHand();
 
