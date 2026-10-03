@@ -1,656 +1,322 @@
-# Flopiq Implementation Plan v1
+# Flopiq Implementation Plan v2
 
-Status: **Ready for implementation**
+Status: **Approved playable-first execution plan**
+
 Depends on:
 - `docs/ARCHITECTURE.md`
 - `docs/COST_AND_DATA_STRATEGY.md`
 
-This plan defines the most efficient build order for Flopiq while preserving the security architecture.
+This document defines the current implementation order. The production architecture in `ARCHITECTURE.md` remains the target architecture.
 
 ---
 
-## 1. Decision: Where We Start
+## 1. Execution principle
 
-Start with a **small TypeScript monorepo and a standalone deterministic poker engine**.
+Reach a genuinely playable product as early as possible without weakening the parts that are expensive or dangerous to rewrite later.
 
-Do **not** start with:
-- polished frontend,
-- database schema,
-- Redis,
-- Soroban contracts,
-- CHIP issuance,
-- production MPC,
-- paid hosting.
+Therefore:
 
-Reason: every one of those systems depends on exact poker state transitions and settlement semantics. Building them before the Poker Core is frozen creates expensive rewrites.
+- simplify or defer surrounding infrastructure,
+- keep Poker Core production-quality and authoritative,
+- preserve boundaries between poker rules, orchestration, persistence, dealing/fairness, and financial settlement,
+- use small independently reviewable changes,
+- do not introduce production infrastructure before its phase merely to imitate the final deployment.
 
-The first production-quality component should be:
+The current build order is:
 
 ```text
-packages/poker-core
+1. Small Playable Prototype
+2. Soroban
+3. Wallet + Stellar CHIP
+4. Minimal Database
+5. MPC
+6. Bind MPC + Poker + Settlement
+7. First Product Version
 ```
 
-It must be independently testable and have no dependency on:
-- Next.js,
-- WebSockets,
-- PostgreSQL,
-- Stellar,
-- Soroban,
-- MPC implementation.
+A later phase must not be pulled forward unless it is required to validate an earlier architectural boundary.
 
 ---
 
-## 2. Initial Toolchain
+## 2. Phase 1 — Small Playable Prototype
 
-Recommended baseline:
+### Goal
 
-- Node.js 24 LTS
-- pnpm 12 workspace
-- TypeScript 5.9 with strict settings
-- Vitest
-- GitHub Actions CI
-- ESM modules
-
-Why:
-- Node 24 is an active LTS line.
-- pnpm workspaces keep a future multi-app/multi-package repo efficient.
-- Vitest supports current Node and is fast for deterministic unit/property-style testing.
-- TypeScript strict mode helps keep protocol/state errors visible early.
-
-Do not chase the newest Current Node release for this project. Prefer LTS.
-
----
-
-## 3. Initial Repository Shape
-
-Create only what is needed now:
+Two players can complete a full No-Limit Texas Hold'em hand:
 
 ```text
-flopiq/
-  package.json
-  pnpm-workspace.yaml
-  tsconfig.base.json
-  .gitignore
-  .editorconfig
-  .github/
-    workflows/
-      ci.yml
-
-  packages/
-    poker-core/
-      package.json
-      tsconfig.json
-      src/
-        index.ts
-        money.ts
-        types.ts
-        state.ts
-        actions.ts
-        betting.ts
-        pots.ts
-        showdown.ts
-        invariants.ts
-      test/
-
-  docs/
-    ARCHITECTURE.md
-    COST_AND_DATA_STRATEGY.md
-    IMPLEMENTATION_PLAN.md
+hand start
+→ hole cards
+→ blinds
+→ preflop
+→ flop
+→ turn
+→ river
+→ showdown or fold
+→ winner resolution
+→ pot award
+→ hand complete
+→ next hand
 ```
 
-Do not create empty apps/services/contracts folders simply to make the repository look complete. Add them when their implementation phase begins.
+The prototype may use a deterministic local dealer and developer-facing harness. It does not require wallet, Stellar, Soroban, database, MPC, production networking, or polished UI.
 
----
+### Non-negotiable properties
 
-## 4. Money Representation
-
-All money/chip math must use integer values.
-
-Recommended TypeScript representation:
-
-```ts
-type ChipAmount = bigint
-```
-
-Never use JavaScript `number` for:
-- stacks,
-- bets,
-- pots,
-- rake,
-- cashier conversion,
-- settlement.
-
-The Stellar integration layer will later define the exact conversion between CHIP protocol units and the asset's 7-decimal Stellar representation.
-
-The Poker Core should not know about XLM or Stellar base units.
-
----
-
-## 5. Poker Core API
-
-Target shape:
-
-```ts
-reduce(state, action) -> {
-  state: nextState,
-  events: PokerEvent[]
-}
-```
-
-Properties:
+Poker Core must remain:
 
 - deterministic,
-- side-effect free,
-- no I/O,
-- no clock reads,
-- no randomness,
-- no database,
-- no blockchain calls.
+- side-effect free or near-pure,
+- independent of UI, database, network, wallet, Stellar, Soroban, and MPC implementation,
+- integer-only for CHIP,
+- protected by conservation/accounting invariants,
+- replayable from explicit canonical inputs.
 
-External systems supply:
-- actions,
-- timeout actions,
-- dealer/card events.
+Poker Core must not depend on:
 
-Poker Core decides whether an action is legal and what deterministic state follows.
+- wall-clock time,
+- database timing,
+- network state,
+- mutable global state,
+- uncontrolled randomness.
 
----
+Dealing remains behind a replaceable Dealer boundary. Poker Core must never use `Math.random()` for game fairness.
 
-## 6. Rules to Implement First
+### Current status
 
-Order matters.
+Completed foundations on `main` include:
 
-### Milestone 1A — Money and invariants
+- bigint CHIP representation and invariants,
+- fold/check/call/bet/raise/all-in reducer,
+- minimum-raise and short-all-in reopening behavior,
+- deterministic main/side-pot construction,
+- deterministic table positions and heads-up order,
+- forced SB/BB preflop initialization,
+- deterministic street progression,
+- deterministic fixed-deck local dealer,
+- deterministic seven-card Texas Hold'em hand ranking.
 
-Implement:
-- nonnegative bigint CHIP,
-- safe add/subtract helpers,
-- canonical serialization,
-- chip conservation assertions.
+### Remaining Phase 1 integration
 
-Acceptance:
-- no floating-point path exists.
+Proceed in small slices:
 
-### Milestone 1B — Betting reducer
+1. deterministic pot awarding, including split pots and an explicit odd-CHIP rule,
+2. showdown/winner resolution,
+3. terminal-fold resolution,
+4. complete hand lifecycle/state machine,
+5. next-hand/button progression,
+6. full heads-up hand integration tests,
+7. regression/invariant hardening.
 
-Implement:
-- fold,
-- check,
-- call,
-- bet,
-- raise,
-- all-in,
-- minimum raise,
-- short all-in,
-- reopening rules,
-- deterministic next actor.
-
-Acceptance:
-- invalid moves are rejected without mutating state.
-
-### Milestone 1C — Pots
-
-Implement:
-- main pot,
-- multiple side pots,
-- folded-player contribution handling,
-- simultaneous all-ins,
-- deterministic pot construction.
-
-Acceptance:
-- total pot contributions equal committed chips.
-
-### Milestone 1D — Table/action order
-
-Implement:
-- 2–9 seats,
-- dealer/button movement,
-- SB/BB,
-- heads-up exception,
-- optional straddle,
-- preflop/postflop action order.
-
-### Milestone 1E — Streets and showdown
-
-Implement:
-- preflop,
-- flop,
-- turn,
-- river,
-- terminal fold,
-- showdown eligibility,
-- SHOW/MUCK state,
-- all-in terminal flow.
-
-Do not put cryptographic dealing inside Poker Core.
+Do not begin Phase 2 merely because an individual primitive exists. Phase 1 is complete when a full heads-up hand can be executed and verified end-to-end through the authoritative core/harness.
 
 ---
 
-## 7. Dealer Boundary
+## 3. Phase 2 — Soroban
 
-Create a protocol boundary before implementing MPC.
+### Goal
 
-Conceptually:
+Prove the financial custody and settlement boundary independently of production wallet/UI integration.
 
-```ts
-interface Dealer {
-  beginHand(...)
-  dealHoleCards(...)
-  revealFlop(...)
-  revealTurn(...)
-  revealRiver(...)
-  revealShowdown(...)
-}
-```
+Implement and test the minimum contract surface needed for:
 
-For early tests use:
-- deterministic seeded/test dealer,
-- fixed-deck fixtures.
+- table-fund locking,
+- safe release,
+- replay-resistant hand settlement,
+- CHIP conservation,
+- rake routing when enabled,
+- explicit authorization boundaries.
 
-Later replace the adapter with MPC without changing poker betting logic.
+Target modules remain:
 
-Never allow Poker Core to call `Math.random()`.
-
----
-
-## 8. Testing Requirement Before Backend Work
-
-The Poker Core is not considered ready because a few example games pass.
-
-It should include:
-- unit tests,
-- regression fixtures,
-- generated/property-style scenario tests where useful,
-- invariant checks after every accepted action.
-
-Mandatory scenarios include:
-- heads-up all-in,
-- 9-player hand,
-- multiple folded contributors,
-- 3+ side pots,
-- short all-in that does not reopen action,
-- full all-in that does reopen action,
-- exact-stack call,
-- zero-stack player,
-- straddle action order,
-- odd payout remainder rule once defined,
-- conservation after every action and hand.
-
-CI must run on every push/PR:
-- typecheck,
-- tests,
-- lint.
-
----
-
-## 9. Phase 2 — Headless Game Server
-
-Only after Poker Core is stable, add:
-
-```text
-apps/game-server
-packages/protocol
-```
-
-Recommended server direction:
-- Node.js + TypeScript
-- Fastify for HTTP boundary
-- `ws` / Fastify WebSocket integration for realtime transport
-- runtime validation of client messages
-- one authoritative sequence per table
-
-Responsibilities:
-- table lifecycle,
-- sessions,
-- timers,
-- 15s + time bank,
-- disconnect policy,
-- sit out next hand,
-- leave-after-hand,
-- manual rebuy,
-- auto-rebuy,
-- multi-table connections,
-- action sequencing.
-
-The server calls Poker Core; it does not duplicate poker rules.
-
----
-
-## 10. Phase 3 — Persistence
-
-Add PostgreSQL only when the headless server needs durable recovery/history.
-
-Use local PostgreSQL first.
-
-Do not pay for managed PostgreSQL during early development unless remote collaboration requires it.
-
-Recommended data access:
-- thin typed SQL layer,
-- Kysely + `pg` is preferred for predictable SQL and explicit storage control,
-- schema migrations stored in Git.
-
-Persist canonical facts:
-- table config,
-- hand start,
-- ordered actions,
-- hand result,
-- settlement/audit references.
-
-Do not persist full table snapshots after every action.
-
-Recovery:
-- replay canonical actions through Poker Core.
-
-A compact street-boundary checkpoint can be added later only if profiling shows a recovery problem.
-
----
-
-## 11. Phase 4 — Minimal Developer UI
-
-Add:
-
-```text
-apps/web
-```
-
-Use:
-- Next.js 16.x, current patched version at implementation time,
-- TypeScript,
-- Tailwind.
-
-This UI is not the final visual design.
-
-Purpose:
-- create/join local tables,
-- display stack/pot,
-- perform actions,
-- test reconnect,
-- test 2–9 players,
-- inspect hand log.
-
-Do not spend significant time on animation/design yet.
-
----
-
-## 12. Phase 5 — Stellar Wallet Authentication
-
-Initial wallet:
-- Albedo.
-
-Authentication:
-- request wallet public key,
-- server issues single-use expiring challenge,
-- player signs challenge,
-- backend verifies signature,
-- backend creates short-lived session.
-
-Requirements:
-- domain-separated challenge,
-- nonce,
-- expiry,
-- one-time consumption,
-- no secret keys.
-
-Financial Soroban authorization remains separate from web login.
-
-Later, consider Stellar Wallets Kit to expand beyond Albedo without redesigning the app.
-
----
-
-## 13. Phase 6 — CHIP and Soroban Financial Layer
-
-Target current Stellar Mainnet protocol/toolchain explicitly when this phase begins.
-
-As of the architecture research checkpoint:
-- Mainnet is Protocol 26.
-- Testnet is Protocol 27.
-
-Do not silently mix Testnet-only protocol assumptions into Mainnet contracts.
-
-CHIP direction:
-- issue CHIP as a Stellar asset,
-- deploy/use its Stellar Asset Contract (SAC),
-- do not build a custom token contract without a concrete requirement.
-
-Contracts:
 - Cashier,
 - TableVault,
 - Settlement,
 - Treasury/Rake.
 
-Build contracts as a Rust workspace using the Stellar CLI recommended layout.
+Before finalizing contracts, define a canonical settlement payload binding at least:
 
-Contract tests must precede testnet deployment.
-
----
-
-## 14. Settlement Boundary
-
-Before contracts are finalized, define one canonical settlement payload.
-
-It should bind at minimum:
 - protocol version,
-- table_id,
-- hand_id,
+- table ID,
+- hand ID,
 - previous committed table state/version,
-- ordered participant IDs/addresses,
+- ordered participants,
 - starting stacks,
 - final stacks,
 - rake,
 - action transcript digest,
-- MPC/deal verification digest,
+- deal/fairness digest placeholder,
 - next state/version.
 
-The Settlement contract must not trust a free-form backend result.
+During this phase, a deterministic/test fairness digest may stand in for the later MPC proof binding. Do not claim production fairness until Phase 6 is complete.
 
-The payload format becomes a protocol artifact shared by:
-- game server,
-- settlement coordinator,
-- MPC/proof layer,
-- contracts,
-- audit UI.
+Contract tests precede testnet/mainnet deployment.
 
 ---
 
-## 15. Phase 7 — MPC/ZK Research Spike
+## 4. Phase 3 — Wallet + Stellar CHIP
 
-Do not immediately write a custom cryptographic protocol.
+### Goal
 
-The most relevant existing Stellar reference is the current StellPoker approach:
-- 3 MPC nodes,
-- REP3 secret sharing,
-- TACEO coNoir,
-- UltraHonk proofs,
-- on-chain verification using Stellar BN254/Poseidon primitives.
+Connect player ownership and the Stellar asset to the proven financial boundary.
 
-This closely matches Flopiq's requirement that one malicious node must not reveal/control the deck.
+Initial direction:
 
-However:
-- StellPoker currently targets up to 6 players,
-- its betting architecture is more on-chain than Flopiq's,
-- Flopiq targets 2–9 players,
-- TACEO marks coSNARK tooling experimental/unaudited.
+- Stellar wallet is permanent player identity,
+- Albedo is the first wallet,
+- use signed, single-use, expiring, domain-separated authentication challenges,
+- never request or store wallet secret keys,
+- CHIP remains a Stellar asset using its SAC unless a concrete requirement justifies another model,
+- cashier conversion remains fixed at 1 XLM = 100 CHIP for the first version.
 
-Therefore create an isolated spike:
-
-```text
-spikes/mpc-dealer
-```
-
-Goals:
-1. reproduce a 3-node local REP3 deal,
-2. prove privacy against one node,
-3. bind session to `hand_id`,
-4. benchmark 2, 6, and 9-player deal/reveal flow,
-5. measure proof latency and memory,
-6. test one-node failure/abort,
-7. determine on-chain verification cost,
-8. document exact trust assumptions.
-
-Do not connect real player money during this spike.
-
-Only after the spike succeeds do we choose the production MPC implementation.
+Financial authorization must remain separate from ordinary application-session authentication.
 
 ---
 
-## 16. Why MPC Is Not Phase 1
+## 5. Phase 4 — Minimal Database
 
-MPC is one of the highest-risk engineering areas in Flopiq.
+### Goal
 
-Starting there creates two problems:
-- poker rules remain unstable while expensive cryptographic code is being written,
-- an experimental crypto stack becomes coupled to the entire application.
+Add only the durable state required for recovery, history, identity/session support, and financial/audit references.
 
-A Dealer interface lets us progress in parallel without weakening the final architecture.
+Use PostgreSQL first. Redis is not required.
+
+Persist facts rather than repeated derived snapshots:
+
+- player identity,
+- table configuration,
+- hand identity/start,
+- ordered canonical actions,
+- final hand result,
+- settlement/audit references,
+- required public verification metadata.
+
+Recovery should replay canonical actions through Poker Core.
+
+A compact checkpoint may be introduced only if measurement shows replay is a problem.
+
+The database must not become the authority for poker legality or withdrawable on-chain funds.
 
 ---
 
-## 17. Phase 8 — Bind Fairness to Settlement
+## 6. Phase 5 — MPC
 
-After both Soroban settlement and MPC are proven independently:
+### Goal
+
+Replace the deterministic prototype dealer with a reviewed threshold/MPC fairness implementation without rewriting Poker Core.
+
+Initial security target:
+
+- three dealer nodes,
+- one malicious node is insufficient to learn/control the full deck,
+- session bound to `hand_id`,
+- replay resistance,
+- safe abort behavior,
+- verifiable public evidence sufficient for settlement binding.
+
+Do not invent a homemade cryptographic protocol.
+
+Use an isolated research/integration spike first. Benchmark at least 2-, 6-, and 9-player flows, failure behavior, proof/verification latency, memory, and on-chain verification cost.
+
+Do not connect real player money to an experimental MPC implementation.
+
+---
+
+## 7. Phase 6 — Bind MPC + Poker + Settlement
+
+### Goal
+
+Make the production security property real.
+
+Conceptually:
 
 ```text
 hand_id
-  + action transcript digest
-  + MPC session/proof digest
-  + final stack vector
-  + rake
-        |
-        v
++ canonical action transcript digest
++ MPC session/proof digest
++ final stack vector
++ rake
+        ↓
 canonical settlement
-        |
-        v
+        ↓
 Soroban validation
 ```
 
-The backend alone must not be sufficient to authorize arbitrary settlement.
+A normal backend compromise must not be sufficient to:
 
-This is the point where the architecture's primary security property becomes real.
+- fabricate a valid financial settlement,
+- manipulate the deck undetectably,
+- learn all private cards,
+- reuse a settlement for another hand.
 
----
-
-## 18. Phase 9 — Production UI
-
-Only now invest heavily in:
-- table visuals,
-- animation,
-- responsive layout,
-- hand history UX,
-- SHOW/MUCK UX,
-- verification details,
-- wallet/cashier experience,
-- multi-table UX,
-- accessibility.
-
-The visual layer must consume the same protocol as the minimal developer UI.
+This phase requires security-focused review before real-value deployment.
 
 ---
 
-## 19. Hosting Sequence
+## 8. Phase 7 — First Product Version
 
-### Development
-- local Node,
-- local PostgreSQL,
-- local three-process MPC,
-- Stellar local/testnet,
-- no Redis,
-- no paid services required.
+Integrate the minimum product surface around the validated core:
 
-### Private integration
-- one inexpensive allowed EU VPS if needed,
-- external encrypted backups,
-- testnet only.
-
-### Public/real-value
-- durable PostgreSQL,
-- separate game server,
-- 3 MPC nodes across independent failure/security domains,
-- object archive/backups,
-- monitoring,
-- Redis only if multi-instance coordination requires it.
-
-Do not separate everything early just to mimic production.
-
----
-
-## 20. Redis Decision
-
-Redis is not a Phase 1 requirement.
-
-Add it only when:
-- multiple game-server instances need pub/sub,
-- cross-instance presence/reconnect state is required,
-- distributed rate limiting/leases are required.
-
-It must never be the sole copy of:
-- balances,
+- authoritative realtime game server,
+- WebSocket table coordination,
+- timers/time bank and disconnect policies,
+- create/join/leave table flow,
+- sit-out and rebuy flow,
+- wallet/cashier UX,
 - hand history,
-- settlements.
+- SHOW/MUCK UX,
+- verification status/details,
+- responsive playable UI,
+- operational monitoring and backups.
+
+The game server coordinates; it does not duplicate Poker Core rules.
+
+Production UI consumes the same authoritative protocol and state transitions proven in earlier phases.
 
 ---
 
-## 21. Cost-Efficient Data Rules
+## 9. Data and infrastructure rules across all phases
 
-Carry these rules into implementation:
+- CHIP uses integer arithmetic only.
+- Store canonical actions/facts, not full snapshots after every action.
+- PostgreSQL is the required durable application database once persistence begins.
+- Redis remains optional until multi-instance coordination actually needs it.
+- Keep recent hand history hot; archive bulky old transcripts/proofs when justified.
+- Never log secrets, private MPC shares, or unrevealed private cards.
+- Prefer portable infrastructure primitives.
+- Measure before scaling.
 
-1. store canonical actions, not repeated state snapshots,
-2. reference players by internal IDs in hot relational rows,
-3. use BIGINT for token/chip values,
-4. keep JSONB for flexible/versioned metadata only,
-5. create indexes from real query patterns,
-6. keep latest 20 player hands hot,
-7. archive bulky old transcripts/proofs to object storage,
-8. use short log retention for routine traffic,
-9. never store secrets/private shares in application logs,
-10. measure before scaling.
+See `docs/COST_AND_DATA_STRATEGY.md` for the detailed data/cost policy.
 
 ---
 
-## 22. Immediate First Work Task
+## 10. Work-unit rule
 
-The first autonomous implementation task should be limited to:
+Every implementation task, whether performed by Work or a complementary development session, must have:
 
-> Bootstrap the TypeScript workspace and implement the first production-quality version of `packages/poker-core` foundation: bigint money type, core state/types, action model, betting reducer, invariants, and exhaustive tests for fold/check/call/bet/raise/all-in including short-all-in reopening behavior. Do not add frontend, database, Stellar, Soroban, wallet, WebSocket, or MPC code.
+- one bounded goal,
+- explicit scope and non-goals,
+- relevant invariants,
+- required tests,
+- validation with tests + typecheck + lint,
+- a small reviewable branch/PR.
 
-Definition of done:
-- Node 24 / pnpm workspace boots cleanly,
-- TypeScript strict compilation passes,
-- Vitest suite passes,
-- CI runs typecheck + tests + lint,
-- all accepted actions preserve chip conservation,
-- invalid actions cannot mutate state,
-- no floating-point chip representation exists,
-- architecture docs remain unchanged unless an implementation contradiction is discovered.
+Before implementation, inspect current `main`, recent commits, open/recent PRs, CI, and relevant architecture documents. Repository reality wins over stale conversation context.
 
-This is the best first implementation slice because it is independently useful and every later Flopiq component depends on it.
+Parallel agents must not knowingly modify the same branch/PR or overlapping implementation area.
 
 ---
 
-## 23. Second Work Task
+## 11. Immediate next work
 
-After review of the first task:
+The current Phase 1 frontier is after deterministic hand ranking.
 
-- finish side-pot construction,
-- table/button/blind/straddle action order,
-- heads-up rules,
-- streets,
-- showdown state,
-- SHOW/MUCK state,
-- 2–9 player scenario tests.
+The smallest safe next unit is deterministic **pot awarding**:
 
-Only after this should the realtime server start.
+- consume constructed pots and ranked eligible hands,
+- support ties/split pots,
+- define/test deterministic odd-CHIP allocation,
+- preserve CHIP conservation,
+- do not yet combine this with the entire hand lifecycle.
 
----
-
-## 24. Rule for Future Work Tasks
-
-Each Work task should have:
-- one bounded architecture goal,
-- explicit files/components in scope,
-- explicit non-goals,
-- security invariants,
-- tests required for completion.
-
-Avoid prompts such as "build Flopiq".
-
-Small, verifiable slices are faster overall because security-sensitive mistakes are caught before they spread across contracts, databases, MPC and UI.
+After that, add showdown resolution and then integrate the complete hand lifecycle.
