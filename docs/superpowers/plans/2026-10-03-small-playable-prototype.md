@@ -1,5 +1,7 @@
 # Small Playable Prototype Implementation Plan
 
+**Status: completed on `main` through the local playable adapter.** The task breakdown below is retained as historical implementation context; do not reopen these tasks solely because their original checkboxes are unchecked.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Let two local players complete deterministic No-Limit Texas Hold'em hands from blind posting through settlement and the next hand while Poker Core remains the sole rules authority.
