@@ -92,7 +92,7 @@ describe('terminal-fold resolution', () => {
       player('bob', 8, 80n, 20n, true),
       player('alice', 2, 90n, 10n, false),
     ];
-    const snapshot = structuredClone(input);
+    const snapshot = input.map((entry) => ({ ...entry }));
 
     const first = resolveTerminalFold(input);
     const second = resolveTerminalFold([...input].reverse());
