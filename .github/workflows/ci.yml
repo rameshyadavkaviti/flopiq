@@ -23,3 +23,5 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm lint
       - run: pnpm test
+      - name: Smoke test local playable table
+        run: printf 'quit\\n' | pnpm play:local
