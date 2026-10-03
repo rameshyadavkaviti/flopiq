@@ -108,14 +108,23 @@ export const settlePotAwards = (
     if (result === undefined || result.potIndex !== pot.index || result.potIndex !== index) {
       throw new Error('Settlement winner results must use canonical contiguous pot indexes');
     }
-    if (!Array.isArray(result.winnerIds) || result.winnerIds.length === 0) {
+    const rawWinnerIds: unknown = result.winnerIds;
+    if (!Array.isArray(rawWinnerIds) || rawWinnerIds.length === 0) {
       throw new Error('Settlement pot must have at least one winner');
     }
-    if (new Set(result.winnerIds).size !== result.winnerIds.length) {
+    if (
+      !rawWinnerIds.every(
+        (playerId): playerId is string => typeof playerId === 'string' && playerId.length > 0,
+      )
+    ) {
+      throw new TypeError('Settlement winner identity must be a nonempty string');
+    }
+    const winnerIds: readonly string[] = rawWinnerIds;
+    if (new Set(winnerIds).size !== winnerIds.length) {
       throw new Error('Settlement pot winner list contains duplicate players');
     }
 
-    for (const playerId of result.winnerIds) {
+    for (const playerId of winnerIds) {
       if (!pot.eligiblePlayerIds.includes(playerId)) {
         throw new Error(`Settlement winner is not eligible for pot: ${playerId}`);
       }
@@ -124,14 +133,14 @@ export const settlePotAwards = (
       }
     }
 
-    const winnerCount = BigInt(result.winnerIds.length);
+    const winnerCount = BigInt(winnerIds.length);
     const baseShare = pot.amount / winnerCount;
     const oddChipCount = Number(pot.amount % winnerCount);
     const payoutAmounts = new Map<string, ChipAmount>();
 
-    for (const playerId of result.winnerIds) payoutAmounts.set(playerId, baseShare);
+    for (const playerId of winnerIds) payoutAmounts.set(playerId, baseShare);
 
-    const oddChipOrder = [...result.winnerIds].sort((leftId, rightId) => {
+    const oddChipOrder = [...winnerIds].sort((leftId, rightId) => {
       const left = playersById.get(leftId);
       const right = playersById.get(rightId);
       if (left === undefined || right === undefined) {
@@ -152,7 +161,7 @@ export const settlePotAwards = (
     }
 
     let potAwarded = chips(0n);
-    const payouts = result.winnerIds
+    const payouts = winnerIds
       .map((playerId) => {
         const player = playersById.get(playerId);
         const amount = payoutAmounts.get(playerId);
