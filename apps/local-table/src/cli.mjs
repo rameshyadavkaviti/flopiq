@@ -1,4 +1,4 @@
-import { createInterface } from 'node:readline/promises';
+import { createInterface } from 'node:readline';
 import { stdin as input, stdout as output } from 'node:process';
 
 import { createStandardDeck } from '@flopiq/poker-core';
@@ -25,33 +25,52 @@ let session = createLocalTable({
   decks: Array.from({ length: 100 }, () => createStandardDeck()),
 });
 
-const readline = createInterface({ input, output });
+const readline = createInterface({
+  input,
+  output,
+  terminal: Boolean(input.isTTY),
+});
+
+const actorName = () => {
+  const actorSeat = session.hand.betting.actingSeat;
+  if (actorSeat === null) return 'table';
+  return (
+    session.hand.betting.players.find((player) => player.seat === actorSeat)?.id ?? 'table'
+  );
+};
+
+const prompt = () => {
+  if (!input.isTTY) return;
+  readline.setPrompt(`${actorName()}> `);
+  readline.prompt();
+};
 
 write('Flopiq local table');
 write('Commands: fold, check, call, bet N, raise N, all-in, cards, next, quit');
 write(renderLocalTable(session));
+prompt();
 
 try {
-  while (true) {
-    const actorSeat = session.hand.betting.actingSeat;
-    const actor =
-      actorSeat === null
-        ? 'table'
-        : session.hand.betting.players.find((player) => player.seat === actorSeat)?.id ?? 'table';
-    const command = (await readline.question(`${actor}> `)).trim();
+  for await (const rawLine of readline) {
+    const command = rawLine.trim();
 
     if (command === 'quit' || command === 'exit') break;
+
     if (command === 'cards') {
+      const actorSeat = session.hand.betting.actingSeat;
       if (actorSeat === null) {
         write('No player is currently acting.');
-        continue;
+      } else {
+        const player = session.hand.betting.players.find(
+          (candidate) => candidate.seat === actorSeat,
+        );
+        if (player === undefined) {
+          write('Current actor is unavailable.');
+        } else {
+          write(`${player.id}: ${holeCardsForPlayer(session, player.id).join(' ')}`);
+        }
       }
-      const player = session.hand.betting.players.find((candidate) => candidate.seat === actorSeat);
-      if (player === undefined) {
-        write('Current actor is unavailable.');
-        continue;
-      }
-      write(`${player.id}: ${holeCardsForPlayer(session, player.id).join(' ')}`);
+      prompt();
       continue;
     }
 
@@ -62,6 +81,8 @@ try {
     } catch (error) {
       write(error instanceof Error ? error.message : String(error));
     }
+
+    prompt();
   }
 } finally {
   readline.close();
