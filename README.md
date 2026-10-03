@@ -2,7 +2,7 @@
 
 Flopiq is a Stellar-based No-Limit Texas Hold'em cash-game platform.
 
-**Phase 1 — Small Playable Prototype is complete.** The prototype keeps Poker Core authoritative, deterministic, infrastructure-independent, and ready for the later production architecture. Phase 2 (Soroban) has not started in this phase-completion checkpoint.
+**Phase 1 — Small Playable Prototype is complete.** The prototype keeps Poker Core authoritative, deterministic, infrastructure-independent, and ready for the later production architecture. **Phase 2 — Soroban is prepared at the repository boundary but financial contract implementation has not started yet.**
 
 ## Current prototype
 
@@ -73,5 +73,14 @@ The local adapter intentionally uses explicit deterministic decks. It is a Phase
 7. First Product Version
 
 This order changes **implementation sequence**, not the approved production security architecture. Production networking, wallet integration, Stellar/Soroban settlement, persistence, MPC, and polished UI remain deferred until their roadmap phase.
+
+## Phase 2 Soroban entry point
+
+The repository now includes an isolated Rust workspace at [`contracts/`](contracts/) plus the Phase 2 protocol documents:
+
+- [`docs/SOROBAN_ARCHITECTURE.md`](docs/SOROBAN_ARCHITECTURE.md)
+- [`docs/SETTLEMENT_PROTOCOL.md`](docs/SETTLEMENT_PROTOCOL.md)
+
+These files define custody, replay/versioning, conservation, contract separation, and the canonical hand-settlement boundary before any real financial logic is implemented.
 
 Architecture, implementation order, security constraints, and cost/data strategy are documented in [`docs/`](docs/).
