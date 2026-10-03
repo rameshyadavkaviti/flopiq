@@ -60,13 +60,19 @@ export const createPreflopBettingRound = (
 ): BettingRoundState => {
   validateBlinds(input.smallBlind, input.bigBlind);
 
+  for (const player of input.players) {
+    assertChipAmount(player.stack);
+    if (player.stack === 0n) {
+      throw new RangeError('Hand participants must have a positive stack');
+    }
+  }
+
   const positions = assignHandPositions(
     input.players.map((player) => player.seat),
     input.buttonSeat,
   );
 
   const players = input.players.map((player): BettingPlayerState => {
-    assertChipAmount(player.stack);
     const forcedBlind = forcedBlindForSeat(
       player.seat,
       positions.smallBlindSeat,

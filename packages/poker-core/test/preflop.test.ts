@@ -105,6 +105,21 @@ describe('preflop betting round initialization', () => {
     ).toThrow(/small blind/i);
   });
 
+  it('rejects zero-stack participants before assigning positions', () => {
+    expect(() =>
+      createPreflopBettingRound({
+        players: [
+          { id: 'alice', seat: 0, stack: 0n },
+          { id: 'bob', seat: 1, stack: 100n },
+          { id: 'carol', seat: 2, stack: 100n },
+        ],
+        buttonSeat: 0,
+        smallBlind: 5n,
+        bigBlind: 10n,
+      }),
+    ).toThrow(/positive stack/i);
+  });
+
   it('does not mutate caller-owned player input', () => {
     const players = [
       { id: 'alice', seat: 0, stack: 100n },
