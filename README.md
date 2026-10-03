@@ -2,7 +2,7 @@
 
 Flopiq is a Stellar-based No-Limit Texas Hold'em cash-game platform.
 
-The project is currently in **Phase 1 — Small Playable Prototype**. The prototype keeps Poker Core authoritative, deterministic, infrastructure-independent, and ready for the later production architecture.
+**Phase 1 — Small Playable Prototype is complete.** The prototype keeps Poker Core authoritative, deterministic, infrastructure-independent, and ready for the later production architecture. Phase 2 (Soroban) has not started in this phase-completion checkpoint.
 
 ## Current prototype
 
@@ -60,7 +60,7 @@ next
 quit
 ```
 
-The local adapter intentionally uses explicit deterministic decks. It is a Phase 1 development harness, not production randomness, networking, privacy, wallet, or settlement infrastructure.
+The local adapter intentionally uses explicit deterministic decks. It is a Phase 1 development harness, not production randomness, networking, privacy, wallet, or settlement infrastructure. The current preflop initializer also rejects a participant whose stack is smaller than the forced blind they must post; short-blind bring-in semantics remain an explicit future hardening decision.
 
 ## Approved build order
 

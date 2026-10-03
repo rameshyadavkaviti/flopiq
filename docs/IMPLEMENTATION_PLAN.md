@@ -84,9 +84,11 @@ Dealing remains behind a replaceable Dealer boundary. Poker Core must never use 
 
 ### Current status
 
-Completed foundations on `main` include:
+**Phase 1 is complete for the approved Small Playable Prototype scope.**
 
-- bigint CHIP representation and invariants,
+Completed on `main`:
+
+- bigint CHIP representation and conservation invariants,
 - fold/check/call/bet/raise/all-in reducer,
 - minimum-raise and short-all-in reopening behavior,
 - deterministic main/side-pot construction,
@@ -94,21 +96,27 @@ Completed foundations on `main` include:
 - forced SB/BB preflop initialization,
 - deterministic street progression,
 - deterministic fixed-deck local dealer,
-- deterministic seven-card Texas Hold'em hand ranking.
+- deterministic seven-card Texas Hold'em hand ranking,
+- terminal-fold and showdown winner resolution,
+- split-pot settlement with deterministic odd-CHIP allocation,
+- complete hand lifecycle through fold/showdown settlement,
+- deterministic next-hand stack carry-forward and button progression,
+- end-to-end heads-up integration coverage,
+- a thin local two-player playable adapter with a verified terminal entry point.
 
-### Remaining Phase 1 integration
+The local adapter remains outside Poker Core rule authority. It supplies explicit deterministic dealer transitions and ranked showdown inputs; Poker Core remains authoritative for betting legality, lifecycle transitions, winner selection, and CHIP settlement.
 
-Proceed in small slices:
+### Known prototype limits
 
-1. deterministic pot awarding, including split pots and an explicit odd-CHIP rule,
-2. showdown/winner resolution,
-3. terminal-fold resolution,
-4. complete hand lifecycle/state machine,
-5. next-hand/button progression,
-6. full heads-up hand integration tests,
-7. regression/invariant hardening.
+- A participant whose stack is smaller than the forced blind they must post is still rejected by the current preflop initializer. Supporting a short big blind correctly requires an explicit bring-in/current-bet model decision rather than weakening the existing betting invariant.
+- The local dealer uses caller-supplied deterministic decks. It does not provide production randomness, privacy, or fairness.
+- The terminal table is a developer harness, not a production game server or UI.
 
-Do not begin Phase 2 merely because an individual primitive exists. Phase 1 is complete when a full heads-up hand can be executed and verified end-to-end through the authoritative core/harness.
+These limits do not pull later infrastructure phases forward.
+
+### Phase boundary
+
+Do not recreate already-completed Phase 1 slices. The next roadmap phase is **Phase 2 — Soroban**. Work on Soroban should begin as a separate phase with its own bounded contract tasks and security review.
 
 ---
 
@@ -309,14 +317,6 @@ Parallel agents must not knowingly modify the same branch/PR or overlapping impl
 
 ## 11. Immediate next work
 
-The current Phase 1 frontier is after deterministic hand ranking.
+Phase 1 has reached its approved completion condition: a full heads-up hand can be executed and verified end-to-end through settlement and the next-hand transition using the local development harness.
 
-The smallest safe next unit is deterministic **pot awarding**:
-
-- consume constructed pots and ranked eligible hands,
-- support ties/split pots,
-- define/test deterministic odd-CHIP allocation,
-- preserve CHIP conservation,
-- do not yet combine this with the entire hand lifecycle.
-
-After that, add showdown resolution and then integrate the complete hand lifecycle.
+The next roadmap phase is **Phase 2 — Soroban**. Do not start Phase 2 from a Phase 1 complementary task unless that new phase has been explicitly assigned. Before any Soroban implementation, re-check current `main`, active branches/PRs, and the contract/security requirements in this document and `ARCHITECTURE.md`.
