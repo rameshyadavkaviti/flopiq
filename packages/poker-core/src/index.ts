@@ -11,3 +11,4 @@ export * from './positions.js';
 export * from './preflop.js';
 export * from './state.js';
 export * from './streets.js';
+export * from './terminal-fold.js';
