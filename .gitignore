@@ -4,3 +4,4 @@ dist/
 *.tsbuildinfo
 .DS_Store
 contracts/target/
+contracts/**/test_snapshots/
