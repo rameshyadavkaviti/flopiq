@@ -7,6 +7,7 @@ export * from './hand-ranking.js';
 export * from './hand.js';
 export * from './invariants.js';
 export * from './money.js';
+export * from './next-hand.js';
 export * from './pots.js';
 export * from './positions.js';
 export * from './preflop.js';
