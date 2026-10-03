@@ -152,4 +152,20 @@ describe('deterministic local dealer', () => {
     const river = revealRiver(revealTurn(revealFlop(preflop)));
     expect(() => revealRiver(river)).toThrow(/turn/i);
   });
+
+  it('rejects reconstructed states with inconsistent cursor or board data', () => {
+    const preflop = createLocalDealer({
+      deck: scriptedDeck,
+      players: [
+        { id: 'alice', seat: 0 },
+        { id: 'bob', seat: 4 },
+      ],
+      buttonSeat: 0,
+    });
+
+    expect(() => revealFlop({ ...preflop, nextCardIndex: 0 })).toThrow(/state/i);
+    expect(() =>
+      revealFlop({ ...preflop, board: ['2c', '3c', '4c', '5c', '6c'] }),
+    ).toThrow(/state/i);
+  });
 });

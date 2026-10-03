@@ -50,12 +50,13 @@ export const validateDeck = (input: readonly unknown[]): readonly Card[] => {
   if (input.length !== 52) throw new RangeError('Deck must contain exactly 52 cards');
 
   const seen = new Set<Card>();
-  const cards = input.map((candidate) => {
-    const card = parseCard(candidate);
+  const cards: Card[] = [];
+  for (let index = 0; index < input.length; index += 1) {
+    const card = parseCard(input[index]);
     if (seen.has(card)) throw new Error(`Deck contains duplicate card: ${card}`);
     seen.add(card);
-    return card;
-  });
+    cards.push(card);
+  }
 
   return Object.freeze(cards);
 };

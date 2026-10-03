@@ -1,4 +1,4 @@
-import { type Card, validateDeck } from './cards.js';
+import { parseCard, type Card, validateDeck } from './cards.js';
 import { nextOccupiedSeat } from './positions.js';
 
 export interface DealPlayer {
@@ -97,6 +97,106 @@ const clockwiseDealOrder = (
   return ordered;
 };
 
+const validateCardArray = (
+  input: readonly Card[],
+  expectedLength: number,
+  name: string,
+): readonly Card[] => {
+  if (!Array.isArray(input) || input.length !== expectedLength) {
+    throw new Error(`Local dealer state has an invalid ${name}`);
+  }
+
+  const cards: Card[] = [];
+  for (let index = 0; index < input.length; index += 1) {
+    cards.push(parseCard(input[index]));
+  }
+  return cards;
+};
+
+const sameCards = (left: readonly Card[], right: readonly Card[]): boolean =>
+  left.length === right.length && left.every((card, index) => card === right[index]);
+
+export const assertLocalDealerInvariants = (state: LocalDealerState): void => {
+  if (typeof state !== 'object' || state === null) {
+    throw new TypeError('Local dealer state must be an object');
+  }
+
+  const deck = validateDeck(state.deck);
+  if (!Array.isArray(state.holeCards)) {
+    throw new Error('Local dealer state must contain hole cards');
+  }
+
+  const players = validatePlayers(
+    state.holeCards.map((entry) => ({ id: entry.playerId, seat: entry.seat })),
+  );
+  assertSeat(state.buttonSeat);
+  if (!players.some((player) => player.seat === state.buttonSeat)) {
+    throw new Error('Local dealer state button must identify a participant');
+  }
+
+  const sortedSeats = players.map((player) => player.seat);
+  if (!state.holeCards.every((entry, index) => entry.seat === sortedSeats[index])) {
+    throw new Error('Local dealer state hole cards must use canonical seat order');
+  }
+
+  const holeCardsBySeat = new Map<number, readonly Card[]>();
+  for (let index = 0; index < state.holeCards.length; index += 1) {
+    const entry = state.holeCards[index];
+    if (entry === undefined || typeof entry !== 'object' || entry === null) {
+      throw new Error('Local dealer state contains an invalid hole-card entry');
+    }
+    holeCardsBySeat.set(
+      entry.seat,
+      validateCardArray(entry.cards, 2, 'hole-card entry'),
+    );
+  }
+
+  const order = clockwiseDealOrder(players, state.buttonSeat);
+  let expectedIndex = 0;
+  for (let round = 0; round < 2; round += 1) {
+    for (const player of order) {
+      const expected = cardAt(deck, expectedIndex);
+      if (holeCardsBySeat.get(player.seat)?.[round] !== expected) {
+        throw new Error('Local dealer state hole cards do not match its deck');
+      }
+      expectedIndex += 1;
+    }
+  }
+
+  const expectedBoard: Card[] = [];
+  const expectedBurned: Card[] = [];
+  const dealBoard = (count: number): void => {
+    expectedBurned.push(cardAt(deck, expectedIndex));
+    expectedIndex += 1;
+    for (let offset = 0; offset < count; offset += 1) {
+      expectedBoard.push(cardAt(deck, expectedIndex));
+      expectedIndex += 1;
+    }
+  };
+
+  if (state.street === 'flop' || state.street === 'turn' || state.street === 'river') {
+    dealBoard(3);
+  }
+  if (state.street === 'turn' || state.street === 'river') dealBoard(1);
+  if (state.street === 'river') dealBoard(1);
+  if (!['preflop', 'flop', 'turn', 'river'].includes(state.street)) {
+    throw new Error('Local dealer state has an unknown street');
+  }
+
+  const board = validateCardArray(state.board, expectedBoard.length, 'board');
+  const burnedCards = validateCardArray(
+    state.burnedCards,
+    expectedBurned.length,
+    'burned-card sequence',
+  );
+  if (!sameCards(board, expectedBoard) || !sameCards(burnedCards, expectedBurned)) {
+    throw new Error('Local dealer state board does not match its deck');
+  }
+  if (!Number.isSafeInteger(state.nextCardIndex) || state.nextCardIndex !== expectedIndex) {
+    throw new Error('Local dealer state has an invalid next-card index');
+  }
+};
+
 export const createLocalDealer = (input: CreateLocalDealerInput): LocalDealerState => {
   const deck = validateDeck(input.deck);
   const players = validatePlayers(input.players);
@@ -142,6 +242,7 @@ const reveal = (
   nextStreet: LocalDealerState['street'],
   boardCardCount: number,
 ): LocalDealerState => {
+  assertLocalDealerInvariants(state);
   if (state.street !== requiredStreet) {
     throw new Error(`${nextStreet[0]?.toUpperCase() ?? ''}${nextStreet.slice(1)} may only be revealed after ${requiredStreet}`);
   }

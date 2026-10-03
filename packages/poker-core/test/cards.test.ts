@@ -36,9 +36,12 @@ describe('cards', () => {
 
   it('rejects incomplete, duplicate, and malformed decks', () => {
     const complete = [...createStandardDeck()];
+    const sparse = [...complete];
+    delete sparse[51];
 
     expect(() => validateDeck(complete.slice(0, 51))).toThrow(/52/i);
     expect(() => validateDeck([...complete.slice(0, 51), complete[0]])).toThrow(/duplicate/i);
     expect(() => validateDeck([...complete.slice(0, 51), '10s'])).toThrow(/card/i);
+    expect(() => validateDeck(sparse)).toThrow(/card/i);
   });
 });
