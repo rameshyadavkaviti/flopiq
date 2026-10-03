@@ -166,7 +166,9 @@ const withCompletedBetting = (
   state: Omit<HandState, 'phase' | 'completion'>,
 ): HandState => {
   if (state.betting.status !== 'complete') {
-    return freezeHandState({ ...state, phase: 'betting', completion: null });
+    const active = freezeHandState({ ...state, phase: 'betting', completion: null });
+    assertHandStateInvariants(active);
+    return active;
   }
 
   if (nonFoldedCount(state.betting) === 1) {
