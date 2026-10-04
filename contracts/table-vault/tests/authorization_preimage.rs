@@ -540,7 +540,7 @@ fn attempt_start_with_approved_tree(
     let invoke = MockAuthInvoke {
         contract: &f.vault,
         fn_name: "start_hand",
-        args: (approved.table.clone(), approved_version).into_val(&f.env),
+        args: (approved.table.clone(), approved.version).into_val(&f.env),
         sub_invokes: &[],
     };
     let first = participants.get(0).unwrap().player;
