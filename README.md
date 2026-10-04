@@ -87,6 +87,7 @@ Architecture, implementation order, security constraints, and cost/data strategy
 
 Phase 2 now has a local-only settlement-state foundation plus a collateralized
 test TableVault with authenticated allocation, exact deposits, replay-safe hand
-versions, and conserved settlement. It deliberately has no withdrawal path and
-is not production custody. See [contracts/README.md](contracts/README.md) for its
-pinned tooling, validation, authorization assumptions, and limitations.
+versions, conserved settlement, and a bounded player-authorized full exit from a
+ready table. This is not yet a complete leave-table lifecycle or production
+custody. See [contracts/README.md](contracts/README.md) for its pinned tooling,
+validation, authorization assumptions, and limitations.
