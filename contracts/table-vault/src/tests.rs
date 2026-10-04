@@ -23,6 +23,23 @@ impl AbortAfterDeposit {
     }
 }
 
+#[contract]
+struct AbortAfterExit;
+
+#[contractimpl]
+impl AbortAfterExit {
+    pub fn invoke(
+        env: Env,
+        vault: Address,
+        table_id: BytesN<32>,
+        player: Address,
+        expected_state_version: u64,
+    ) -> Result<(), VaultError> {
+        TableVaultClient::new(&env, &vault).exit(&table_id, &player, &expected_state_version);
+        Err(VaultError::Storage)
+    }
+}
+
 struct Fixture {
     env: Env,
     vault: Address,
@@ -38,6 +55,7 @@ fn fixture(player_count: u32, buy_in: i128) -> Fixture {
     let admin = Address::generate(&env);
     let sac = env.register_stellar_asset_contract_v2(admin.clone());
     sac.issuer().set_flag(IssuerFlags::ClawbackEnabledFlag);
+    sac.issuer().set_flag(IssuerFlags::RevocableFlag);
     let token = sac.address();
     let vault = env.register(TableVault, TableVaultArgs::__constructor(&token));
     let mut participants = Vec::new(&env);
@@ -374,6 +392,21 @@ fn funding_and_active_phase_transitions_are_enforced() {
 }
 
 #[test]
+fn start_hand_rejects_a_retained_zero_stack_participant() {
+    let f = fixture(2, 100);
+    fund(&f);
+    let client = TableVaultClient::new(&f.env, &f.vault);
+    let hand = client.start_hand(&f.table_id, &0);
+    client.commit(&settlement(&f, hand, vec![&f.env, 200, 0]));
+
+    assert_eq!(
+        client.try_start_hand(&f.table_id, &1),
+        Err(Ok(VaultError::Phase))
+    );
+    assert_eq!(client.table(&f.table_id).state.version, 1);
+}
+
+#[test]
 fn start_and_settlement_require_every_participant() {
     let f = fixture(2, 100);
     fund(&f);
@@ -585,5 +618,340 @@ fn unknown_table_operations_are_rejected_without_financial_effect() {
     assert_eq!(
         token::TokenClient::new(&f.env, &f.token).balance(&f.vault),
         0
+    );
+}
+
+#[test]
+fn ready_exit_returns_exact_balance_and_reduces_exact_liability() {
+    use soroban_sdk::{Event, testutils::Events};
+
+    let f = fixture(2, 100);
+    fund(&f);
+    let client = TableVaultClient::new(&f.env, &f.vault);
+    let player = f.participants.get(0).unwrap().player;
+    let participants_before = client.table(&f.table_id).state.participants;
+    let player_before = token::TokenClient::new(&f.env, &f.token).balance(&player);
+
+    assert_eq!(client.exit(&f.table_id, &player, &0), 100);
+    let expected = Exited {
+        table_id: f.table_id.clone(),
+        player: player.clone(),
+        amount: 100,
+        next_state_version: 1,
+    };
+    assert_eq!(
+        f.env.events().all().filter_by_contract(&f.vault),
+        vec![
+            &f.env,
+            (
+                f.vault.clone(),
+                expected.topics(&f.env),
+                expected.data(&f.env)
+            )
+        ]
+    );
+
+    let table = client.table(&f.table_id);
+    assert_eq!(table.phase, TablePhase::Ready);
+    assert_eq!(table.state.version, 1);
+    assert_eq!(table.state.stacks, vec![&f.env, 0, 100]);
+    assert_eq!(table.state.participants, participants_before);
+    assert_eq!(
+        token::TokenClient::new(&f.env, &f.token).balance(&player),
+        player_before + 100
+    );
+    assert_eq!(
+        client.backing(),
+        Backing {
+            collateral: 100,
+            liabilities: 100,
+            surplus: 0
+        }
+    );
+}
+
+#[test]
+fn exit_requires_the_exiting_players_authorization() {
+    let f = fixture(2, 100);
+    fund(&f);
+    let client = TableVaultClient::new(&f.env, &f.vault);
+    let player = f.participants.get(0).unwrap().player;
+    let table_before = client.table(&f.table_id);
+    let backing_before = client.backing();
+    let player_before = token::TokenClient::new(&f.env, &f.token).balance(&player);
+    f.env.set_auths(&[]);
+
+    assert!(client.try_exit(&f.table_id, &player, &0).is_err());
+    assert_eq!(client.table(&f.table_id), table_before);
+    assert_eq!(client.backing(), backing_before);
+    assert_eq!(
+        token::TokenClient::new(&f.env, &f.token).balance(&player),
+        player_before
+    );
+}
+
+#[test]
+fn one_player_cannot_authorize_another_players_exit() {
+    let f = fixture(2, 100);
+    fund(&f);
+    let client = TableVaultClient::new(&f.env, &f.vault);
+    let attacker = f.participants.get(0).unwrap().player;
+    let victim = f.participants.get(1).unwrap().player;
+    let table_before = client.table(&f.table_id);
+    f.env.set_auths(&[]);
+    let invocation = MockAuthInvoke {
+        contract: &f.vault,
+        fn_name: "exit",
+        args: (f.table_id.clone(), victim.clone(), 0_u64).into_val(&f.env),
+        sub_invokes: &[],
+    };
+
+    assert!(
+        client
+            .mock_auths(&[MockAuth {
+                address: &attacker,
+                invoke: &invocation,
+            }])
+            .try_exit(&f.table_id, &victim, &0)
+            .is_err()
+    );
+    assert_eq!(client.table(&f.table_id), table_before);
+    assert_eq!(client.backing().liabilities, 200);
+}
+
+#[test]
+fn exit_rejects_an_unknown_table() {
+    let f = fixture(2, 100);
+    let client = TableVaultClient::new(&f.env, &f.vault);
+    let player = f.participants.get(0).unwrap().player;
+    let unknown = BytesN::from_array(&f.env, &[73; 32]);
+
+    assert_eq!(
+        client.try_exit(&unknown, &player, &0),
+        Err(Ok(VaultError::UnknownTable))
+    );
+    assert_eq!(client.backing().liabilities, 0);
+}
+
+#[test]
+fn exit_rejects_an_unknown_participant() {
+    let f = fixture(2, 100);
+    fund(&f);
+    let client = TableVaultClient::new(&f.env, &f.vault);
+    let unknown = Address::generate(&f.env);
+    let table_before = client.table(&f.table_id);
+
+    assert_eq!(
+        client.try_exit(&f.table_id, &unknown, &0),
+        Err(Ok(VaultError::Participants))
+    );
+    assert_eq!(client.table(&f.table_id), table_before);
+    assert_eq!(client.backing().liabilities, 200);
+}
+
+#[test]
+fn repeated_exit_rejects_zero_liability() {
+    let f = fixture(2, 100);
+    fund(&f);
+    let client = TableVaultClient::new(&f.env, &f.vault);
+    let player = f.participants.get(0).unwrap().player;
+    client.exit(&f.table_id, &player, &0);
+    let table_before = client.table(&f.table_id);
+
+    assert_eq!(
+        client.try_exit(&f.table_id, &player, &1),
+        Err(Ok(VaultError::NoLiability))
+    );
+    assert_eq!(client.table(&f.table_id), table_before);
+    assert_eq!(client.backing().liabilities, 100);
+}
+
+#[test]
+fn stale_exit_version_is_rejected_without_mutation() {
+    let f = fixture(2, 100);
+    fund(&f);
+    let client = TableVaultClient::new(&f.env, &f.vault);
+    let first = f.participants.get(0).unwrap().player;
+    let second = f.participants.get(1).unwrap().player;
+    client.exit(&f.table_id, &first, &0);
+    let table_before = client.table(&f.table_id);
+
+    assert_eq!(
+        client.try_exit(&f.table_id, &second, &0),
+        Err(Ok(VaultError::Version))
+    );
+    assert_eq!(client.table(&f.table_id), table_before);
+    assert_eq!(client.backing().liabilities, 100);
+}
+
+#[test]
+fn exit_is_rejected_while_table_is_funding() {
+    let f = fixture(2, 100);
+    let client = TableVaultClient::new(&f.env, &f.vault);
+    let player = f.participants.get(0).unwrap().player;
+
+    assert_eq!(
+        client.try_exit(&f.table_id, &player, &0),
+        Err(Ok(VaultError::Phase))
+    );
+    assert_eq!(client.backing().liabilities, 0);
+}
+
+#[test]
+fn exit_is_rejected_during_an_active_hand() {
+    let f = fixture(2, 100);
+    fund(&f);
+    let client = TableVaultClient::new(&f.env, &f.vault);
+    let player = f.participants.get(0).unwrap().player;
+    client.start_hand(&f.table_id, &0);
+    let table_before = client.table(&f.table_id);
+
+    assert_eq!(
+        client.try_exit(&f.table_id, &player, &0),
+        Err(Ok(VaultError::Phase))
+    );
+    assert_eq!(client.table(&f.table_id), table_before);
+    assert_eq!(client.backing().liabilities, 200);
+}
+
+#[test]
+fn sequential_and_final_exits_leave_zero_liability_ready_table() {
+    let f = fixture(3, 100);
+    fund(&f);
+    let client = TableVaultClient::new(&f.env, &f.vault);
+    for index in 0..3_u32 {
+        let player = f.participants.get(index).unwrap().player;
+        assert_eq!(client.exit(&f.table_id, &player, &(index as u64)), 100);
+        assert_eq!(client.backing().liabilities, i128::from(2 - index) * 100);
+    }
+
+    let table = client.table(&f.table_id);
+    assert_eq!(table.phase, TablePhase::Ready);
+    assert_eq!(table.state.version, 3);
+    assert_eq!(table.state.stacks, vec![&f.env, 0, 0, 0]);
+    assert_eq!(table.state.participants, f.participants);
+    assert_eq!(client.backing().collateral, 0);
+    assert_eq!(client.backing().liabilities, 0);
+}
+
+#[test]
+fn exit_isolates_tables_and_other_participants() {
+    let f = fixture(2, 100);
+    fund(&f);
+    let client = TableVaultClient::new(&f.env, &f.vault);
+    let mut other_proposal = f.proposal.clone();
+    other_proposal.nonce = BytesN::from_array(&f.env, &[74; 32]);
+    let other_table_id = client.create_table(&other_proposal);
+    for participant in f.participants.iter() {
+        client.deposit(&other_table_id, &participant.player, &100);
+    }
+    let first = f.participants.get(0).unwrap().player;
+    let second = f.participants.get(1).unwrap().player;
+    let second_before = token::TokenClient::new(&f.env, &f.token).balance(&second);
+
+    client.exit(&f.table_id, &first, &0);
+
+    assert_eq!(client.table(&f.table_id).state.stacks, vec![&f.env, 0, 100]);
+    assert_eq!(client.table(&f.table_id).state.version, 1);
+    assert_eq!(
+        client.table(&other_table_id).state.stacks,
+        vec![&f.env, 100, 100]
+    );
+    assert_eq!(client.table(&other_table_id).state.version, 0);
+    assert_eq!(
+        token::TokenClient::new(&f.env, &f.token).balance(&second),
+        second_before
+    );
+    assert_eq!(client.backing().liabilities, 300);
+}
+
+#[test]
+fn failed_enclosing_transaction_rolls_back_exit_and_sac_return() {
+    let f = fixture(2, 100);
+    fund(&f);
+    let client = TableVaultClient::new(&f.env, &f.vault);
+    let abort = f.env.register(AbortAfterExit, ());
+    let abort_client = AbortAfterExitClient::new(&f.env, &abort);
+    let player = f.participants.get(0).unwrap().player;
+    let table_before = client.table(&f.table_id);
+    let backing_before = client.backing();
+    let player_before = token::TokenClient::new(&f.env, &f.token).balance(&player);
+
+    assert_eq!(
+        abort_client.try_invoke(&f.vault, &f.table_id, &player, &0),
+        Err(Ok(VaultError::Storage))
+    );
+    assert_eq!(client.table(&f.table_id), table_before);
+    assert_eq!(client.backing(), backing_before);
+    assert_eq!(
+        token::TokenClient::new(&f.env, &f.token).balance(&player),
+        player_before
+    );
+}
+
+#[test]
+fn sac_transfer_failure_rolls_back_exit_accounting() {
+    let f = fixture(2, 100);
+    fund(&f);
+    let client = TableVaultClient::new(&f.env, &f.vault);
+    let player = f.participants.get(0).unwrap().player;
+    let table_before = client.table(&f.table_id);
+    let vault_before = token::TokenClient::new(&f.env, &f.token).balance(&f.vault);
+    let player_before = token::TokenClient::new(&f.env, &f.token).balance(&player);
+    token::StellarAssetClient::new(&f.env, &f.token).set_authorized(&f.vault, &false);
+
+    assert!(client.try_exit(&f.table_id, &player, &0).is_err());
+    assert_eq!(client.table(&f.table_id), table_before);
+    assert_eq!(client.backing().liabilities, 200);
+    assert_eq!(
+        token::TokenClient::new(&f.env, &f.token).balance(&f.vault),
+        vault_before
+    );
+    assert_eq!(
+        token::TokenClient::new(&f.env, &f.token).balance(&player),
+        player_before
+    );
+}
+
+#[test]
+fn exit_preserves_surplus_and_conserves_collateral() {
+    let f = fixture(2, 100);
+    fund(&f);
+    let client = TableVaultClient::new(&f.env, &f.vault);
+    let player = f.participants.get(0).unwrap().player;
+    token::StellarAssetClient::new(&f.env, &f.token).mint(&f.vault, &25);
+
+    assert_eq!(client.exit(&f.table_id, &player, &0), 100);
+    assert_eq!(
+        client.backing(),
+        Backing {
+            collateral: 125,
+            liabilities: 100,
+            surplus: 25
+        }
+    );
+}
+
+#[test]
+fn full_exit_supports_large_i128_balance() {
+    let f = fixture(2, 100);
+    let client = TableVaultClient::new(&f.env, &f.vault);
+    let mut proposal = f.proposal.clone();
+    proposal.nonce = BytesN::from_array(&f.env, &[75; 32]);
+    proposal.buy_ins = vec![&f.env, i128::MAX - 1, 1];
+    let table_id = client.create_table(&proposal);
+    let first = f.participants.get(0).unwrap().player;
+    let second = f.participants.get(1).unwrap().player;
+    token::StellarAssetClient::new(&f.env, &f.token).mint(&first, &(i128::MAX - 201));
+    client.deposit(&table_id, &first, &(i128::MAX - 1));
+    client.deposit(&table_id, &second, &1);
+
+    assert_eq!(client.exit(&table_id, &first, &0), i128::MAX - 1);
+    assert_eq!(client.table(&table_id).state.stacks, vec![&f.env, 0, 1]);
+    assert_eq!(client.backing().collateral, 1);
+    assert_eq!(client.backing().liabilities, 1);
+    assert_eq!(
+        token::TokenClient::new(&f.env, &f.token).balance(&first),
+        i128::MAX - 1
     );
 }

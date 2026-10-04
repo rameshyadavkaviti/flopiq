@@ -2,8 +2,9 @@
 
 Phase 2 now includes the non-custodial settlement-state foundation and an
 **authenticated, SAC-backed local-test TableVault**. Phase 2 is not complete.
-The vault deliberately has no withdrawal or production settlement authority;
-do not deploy it with real funds.
+The vault includes only a bounded, player-authorized full exit from a ready table,
+not a production leave-table lifecycle or production settlement authority. Do not
+deploy it with real funds.
 
 ## Tooling
 
@@ -78,23 +79,21 @@ restored, not treated as absent; automatic/manual restoration and TTL maintenanc
 are operational requirements before deployment. This slice has no TTL service.
 
 `table-vault` adds authenticated table allocation, exact one-time deposits into
-one immutable SAC, version-bound hand allocation, and conserved settlement. See
-[table-vault/README.md](table-vault/README.md) for its API and threat boundary.
+one immutable SAC, version-bound hand allocation, conserved settlement, and exact
+full-balance exits from `Ready`. See [table-vault/README.md](table-vault/README.md)
+for its API and threat boundary.
 
 ## Limitations and next boundary
 
 The original `table-state` contract remains a local state-only test foundation.
-The vault has no withdrawal, rebuy, participant replacement, timeout, admin,
-upgrade, treasury, or cashier path. Its unanimous participant consent model is
-safe for local development but has a deliberate liveness limitation: any player
-can refuse to start or settle a hand. Final fairness/threshold authorization is
-still Phase 6. Issuer clawback can make a vault insolvent; the vault detects that
-condition and blocks financial transitions, but cannot repair it.
-
-The next safe task is to specify and implement the smallest authorized exit path
-for a ready (not active) table, including exact liability reduction and SAC
-transfer atomicity. It must not introduce unilateral backend authority or pretend
-to solve the later fairness authorization protocol.
+The vault has no partial withdrawal, redeposit, re-entry, participant replacement,
+seat reassignment, table closure, timeout, admin, upgrade, treasury, or cashier
+path. A full exit retains the participant with zero liability and prevents another
+hand from starting. Its unanimous participant consent model is safe for local
+development but has a deliberate liveness limitation: any player can refuse to
+start or settle a hand. Final fairness/threshold authorization is still Phase 6.
+Issuer clawback can make a vault insolvent; the vault detects that condition and
+blocks financial transitions, but cannot repair it.
 
 Architecture: [Soroban](../docs/SOROBAN_ARCHITECTURE.md),
 [settlement protocol](../docs/SETTLEMENT_PROTOCOL.md),

@@ -8,7 +8,7 @@ use soroban_sdk::{
     Address, BytesN, Env, Executable, contract, contractimpl, contracttype, token, xdr::ToXdr,
 };
 pub use types::{
-    Backing, Deposited, HandStarted, SettlementCommitted, Table, TableCreated, TablePhase,
+    Backing, Deposited, Exited, HandStarted, SettlementCommitted, Table, TableCreated, TablePhase,
     TableProposal, VaultError,
 };
 
@@ -175,6 +175,9 @@ impl TableVault {
         if table.state.version != expected_state_version || expected_state_version == u64::MAX {
             return Err(VaultError::Version);
         }
+        if table.state.stacks.iter().any(|stack| stack <= 0) {
+            return Err(VaultError::Phase);
+        }
         checked_backing(&env)?;
         authorize_all(&table.state.participants);
         let hand_id = identity::hand_id(&env, &table_id, expected_state_version);
@@ -192,6 +195,77 @@ impl TableVault {
         }
         .publish(&env);
         Ok(hand_id)
+    }
+
+    /// Returns a participant's entire Ready-table balance from the bound SAC.
+    /// Membership is retained with a zero stack and the state version advances once.
+    pub fn exit(
+        env: Env,
+        table_id: BytesN<32>,
+        player: Address,
+        expected_state_version: u64,
+    ) -> Result<i128, VaultError> {
+        let mut table = load_table(&env, &table_id)?;
+        if table.phase != TablePhase::Ready {
+            return Err(VaultError::Phase);
+        }
+        if table.state.version != expected_state_version || expected_state_version == u64::MAX {
+            return Err(VaultError::Version);
+        }
+
+        let mut player_index = None;
+        for (index, participant) in table.state.participants.iter().enumerate() {
+            if participant.player == player {
+                player_index = Some(index as u32);
+                break;
+            }
+        }
+        let index = player_index.ok_or(VaultError::Participants)?;
+        let amount = table.state.stacks.get(index).ok_or(VaultError::Storage)?;
+        if amount <= 0 {
+            return Err(VaultError::NoLiability);
+        }
+
+        let before = checked_backing(&env)?;
+        let next_liabilities = before
+            .liabilities
+            .checked_sub(amount)
+            .ok_or(VaultError::Amount)?;
+        let expected_collateral = before
+            .collateral
+            .checked_sub(amount)
+            .ok_or(VaultError::Insolvent)?;
+        let next_state_version = expected_state_version
+            .checked_add(1)
+            .ok_or(VaultError::Version)?;
+
+        player.require_auth();
+
+        table.state.stacks.set(index, 0_i128);
+        table.state.version = next_state_version;
+        env.storage()
+            .persistent()
+            .set(&Key::Table(table_id.clone()), &table);
+        env.storage()
+            .persistent()
+            .set(&Key::Liabilities, &next_liabilities);
+
+        let token = token_address(&env)?;
+        let vault = env.current_contract_address();
+        token::TokenClient::new(&env, &token).transfer(&vault, &player, &amount);
+        let after_collateral = token::TokenClient::new(&env, &token).balance(&vault);
+        if after_collateral != expected_collateral {
+            return Err(VaultError::Insolvent);
+        }
+
+        Exited {
+            table_id,
+            player,
+            amount,
+            next_state_version,
+        }
+        .publish(&env);
+        Ok(amount)
     }
 
     pub fn commit(env: Env, settlement: Settlement) -> Result<(), VaultError> {
