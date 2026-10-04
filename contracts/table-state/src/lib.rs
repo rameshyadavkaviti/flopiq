@@ -1,9 +1,8 @@
 #![no_std]
 
-mod types;
-mod validation;
+use flopiq_settlement_types::validation;
+pub use flopiq_settlement_types::{CommittedState, Error, Participant, Settlement};
 use soroban_sdk::{contract, contractevent, contractimpl, contracttype, BytesN, Env, Vec};
-pub use types::{CommittedState, Error, Participant, Settlement};
 
 #[contracttype]
 #[derive(Clone)]
@@ -66,34 +65,12 @@ impl TableState {
 
     pub fn commit(env: Env, settlement: Settlement) -> Result<(), Error> {
         use soroban_sdk::xdr::ToXdr;
-        if settlement.protocol_version != 1 {
-            return Err(Error::Protocol);
-        }
         let state = Self::state(env.clone(), settlement.table_id.clone())?;
         let hand_key = Key::Hand(settlement.hand_id.clone());
         if env.storage().persistent().has(&hand_key) {
             return Err(Error::Replay);
         }
-        if settlement.previous_state_version != state.version
-            || state.version.checked_add(1) != Some(settlement.next_state_version)
-        {
-            return Err(Error::Version);
-        }
-        validation::participants(&settlement.participants)?;
-        let starting =
-            validation::total(&settlement.starting_stacks, settlement.participants.len())?;
-        let ending = validation::total(&settlement.final_stacks, settlement.participants.len())?;
-        if settlement.rake != 0 {
-            return Err(Error::RakeDisabled);
-        }
-        if settlement.participants != state.participants
-            || settlement.starting_stacks != state.stacks
-        {
-            return Err(Error::StateMismatch);
-        }
-        if starting != ending {
-            return Err(Error::Conservation);
-        }
+        validation::transition(&state, &settlement)?;
         for participant in state.participants.iter() {
             participant.player.require_auth();
         }

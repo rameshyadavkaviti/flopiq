@@ -1,8 +1,9 @@
 # Flopiq Soroban workspace
 
-Phase 2A implements a **non-custodial, local-test state foundation**. Phase 2 is
-not complete. No contract in this workspace accepts, holds, or transfers tokens.
-Do not deploy this foundation with real funds.
+Phase 2 now includes the non-custodial settlement-state foundation and an
+**authenticated, SAC-backed local-test TableVault**. Phase 2 is not complete.
+The vault deliberately has no withdrawal or production settlement authority;
+do not deploy it with real funds.
 
 ## Tooling
 
@@ -37,6 +38,10 @@ CLI archive SHA-256 before executing it.
 
 ## Implemented boundary
 
+`settlement-types` owns the canonical settlement payload, committed-state types,
+and shared validation used by both contracts. This prevents the custody contract
+and state-only foundation from drifting into different financial protocols.
+
 `table-state` exports reusable Soroban types and a small contract:
 
 - `initialize(table_id, participants, stacks)`: create version zero once.
@@ -52,9 +57,10 @@ Soroban `contracttype` values use canonical ScVal XDR, not JSON or Rust memory
 layout. The event commits SHA-256 of the full settlement XDR. This audit hash is
 not a standalone signing protocol or fairness proof.
 
-Amounts are **Phase 2A test accounting units**, capped at nonnegative `i128`
-with checked totals. They are neither Poker Core CHIP nor SAC base units. No
-conversion exists; production asset conversion is explicitly deferred to Phase 3.
+Amounts in `table-state` are **Phase 2A test accounting units**. Amounts in
+`table-vault` are explicitly **test SAC base units**. Both are nonnegative `i128`
+with checked totals. Neither is Poker Core CHIP, and no implicit 1:1 conversion
+exists; production asset conversion remains deferred to Phase 3.
 Rake must be exactly zero until a bounded policy and treasury routing exist.
 
 Both entry points require unanimous participant `Address::require_auth()`, which
@@ -71,22 +77,24 @@ Replay markers are never deleted or temporary. Archived persistent entries must 
 restored, not treated as absent; automatic/manual restoration and TTL maintenance
 are operational requirements before deployment. This slice has no TTL service.
 
+`table-vault` adds authenticated table allocation, exact one-time deposits into
+one immutable SAC, version-bound hand allocation, and conserved settlement. See
+[table-vault/README.md](table-vault/README.md) for its API and threat boundary.
+
 ## Limitations and next boundary
 
-Initialization creates test balances, not collateralized claims. Table/hand IDs
-are trusted fixture inputs: without an allocation/registration scheme, an untrusted
-caller could preemptively consume another caller's intended identifier using their
-own consenting participants. This is another reason this contract is local-only.
-Hand uniqueness is enforced within this contract instance, not across deployments.
-There is no pending-hand registration, membership change, rebuy, withdrawal, token
-integration, custody, upgrade/admin path, treasury, or cashier.
+The original `table-state` contract remains a local state-only test foundation.
+The vault has no withdrawal, rebuy, participant replacement, timeout, admin,
+upgrade, treasury, or cashier path. Its unanimous participant consent model is
+safe for local development but has a deliberate liveness limitation: any player
+can refuse to start or settle a hand. Final fairness/threshold authorization is
+still Phase 6. Issuer clawback can make a vault insolvent; the vault detects that
+condition and blocks financial transitions, but cannot repair it.
 
-Before custody, define authenticated table/hand allocation and collateral-backed
-initialization; do not turn this test initializer into a production deposit API.
-Keep TableVault, Settlement, Treasury/Rake, and Cashier as explicit responsibilities.
-The next safe task is a reviewed TableVault deposit/lock design with a test SAC,
-player-owned authorization, explicit amount domain and table registration, followed
-by its own small tested implementation. Final fairness authorization is still Phase 6.
+The next safe task is to specify and implement the smallest authorized exit path
+for a ready (not active) table, including exact liability reduction and SAC
+transfer atomicity. It must not introduce unilateral backend authority or pretend
+to solve the later fairness authorization protocol.
 
 Architecture: [Soroban](../docs/SOROBAN_ARCHITECTURE.md),
 [settlement protocol](../docs/SETTLEMENT_PROTOCOL.md),

@@ -2,7 +2,7 @@
 
 Flopiq is a Stellar-based No-Limit Texas Hold'em cash-game platform.
 
-**Phase 1 — Small Playable Prototype is complete.** The prototype keeps Poker Core authoritative, deterministic, infrastructure-independent, and ready for the later production architecture. **Phase 2A — Soroban has a tested, non-custodial settlement-state foundation. Custody and production financial integration remain unimplemented.**
+**Phase 1 — Small Playable Prototype is complete.** The prototype keeps Poker Core authoritative, deterministic, infrastructure-independent, and ready for the later production architecture. **Phase 2 — Soroban now has a tested settlement-state foundation and authenticated, test-SAC-backed TableVault. Production custody and financial integration remain incomplete.**
 
 ## Current prototype
 
@@ -85,6 +85,8 @@ These files define custody, replay/versioning, conservation, contract separation
 
 Architecture, implementation order, security constraints, and cost/data strategy are documented in [`docs/`](docs/).
 
-Phase 2A now has a local-only, non-custodial Soroban settlement-state foundation.
-See [contracts/README.md](contracts/README.md) for its pinned tooling, validation,
-authorization assumptions, and deliberate limitations. Phase 2 remains in progress.
+Phase 2 now has a local-only settlement-state foundation plus a collateralized
+test TableVault with authenticated allocation, exact deposits, replay-safe hand
+versions, and conserved settlement. It deliberately has no withdrawal path and
+is not production custody. See [contracts/README.md](contracts/README.md) for its
+pinned tooling, validation, authorization assumptions, and limitations.

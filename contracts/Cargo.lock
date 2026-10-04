@@ -773,9 +773,25 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "aedcfb3409746eddb02b9e19ebda1c3394f759a152e48ee875a0844d1b955484"
 
 [[package]]
+name = "flopiq-settlement-types"
+version = "0.1.0"
+dependencies = [
+ "soroban-sdk",
+]
+
+[[package]]
 name = "flopiq-table-state"
 version = "0.1.0"
 dependencies = [
+ "flopiq-settlement-types",
+ "soroban-sdk",
+]
+
+[[package]]
+name = "flopiq-table-vault"
+version = "0.1.0"
+dependencies = [
+ "flopiq-settlement-types",
  "soroban-sdk",
 ]
 
