@@ -5,7 +5,7 @@ use flopiq_table_vault::{
 use soroban_sdk::{
     Address, BytesN, Env, IntoVal, Vec,
     testutils::{Address as _, MockAuth, MockAuthInvoke},
-    token, vec,
+    token,
 };
 
 struct Fixture {
@@ -222,20 +222,22 @@ fn create_table_authorization_binds_the_complete_valid_proposal() {
     }
 }
 
+struct DepositCall<'a> {
+    table: &'a BytesN<32>,
+    player: &'a Address,
+    amount: i128,
+}
+
 fn attempt_deposit_with_approved_tree(
     f: &Fixture,
-    approved_table: &BytesN<32>,
-    approved_player: &Address,
-    approved_amount: i128,
-    actual_table: &BytesN<32>,
-    actual_player: &Address,
-    actual_amount: i128,
+    approved: DepositCall<'_>,
+    actual: DepositCall<'_>,
     expect_failure: bool,
 ) {
     let transfer_invoke = MockAuthInvoke {
         contract: &f.token,
         fn_name: "transfer",
-        args: (approved_player.clone(), f.vault.clone(), approved_amount).into_val(&f.env),
+        args: (approved.player.clone(), f.vault.clone(), approved.amount).into_val(&f.env),
         sub_invokes: &[],
     };
     let transfer_sub_invokes = [transfer_invoke];
@@ -243,15 +245,15 @@ fn attempt_deposit_with_approved_tree(
         contract: &f.vault,
         fn_name: "deposit",
         args: (
-            approved_table.clone(),
-            approved_player.clone(),
-            approved_amount,
+            approved.table.clone(),
+            approved.player.clone(),
+            approved.amount,
         )
             .into_val(&f.env),
         sub_invokes: &transfer_sub_invokes,
     };
     let auths = [MockAuth {
-        address: approved_player,
+        address: approved.player,
         invoke: &deposit_invoke,
     }];
     let client = TableVaultClient::new(&f.env, &f.vault);
@@ -259,13 +261,13 @@ fn attempt_deposit_with_approved_tree(
         assert!(
             client
                 .mock_auths(&auths)
-                .try_deposit(actual_table, actual_player, &actual_amount)
+                .try_deposit(actual.table, actual.player, &actual.amount)
                 .is_err()
         );
     } else {
         client
             .mock_auths(&auths)
-            .deposit(actual_table, actual_player, &actual_amount);
+            .deposit(actual.table, actual.player, &actual.amount);
     }
 }
 
@@ -307,7 +309,12 @@ fn deposit_authorization_cannot_move_between_tables() {
     let vault_before = token::TokenClient::new(&f.env, &f.token).balance(&f.vault);
 
     f.env.set_auths(&[]);
-    attempt_deposit_with_approved_tree(&f, &table_a, &player, 100, &table_b, &player, 100, true);
+    attempt_deposit_with_approved_tree(
+        &f,
+        DepositCall { table: &table_a, player: &player, amount: 100 },
+        DepositCall { table: &table_b, player: &player, amount: 100 },
+        true,
+    );
     assert_deposit_unchanged(
         &f,
         &table_b,
@@ -318,7 +325,12 @@ fn deposit_authorization_cannot_move_between_tables() {
         vault_before,
     );
 
-    attempt_deposit_with_approved_tree(&f, &table_b, &player, 100, &table_b, &player, 100, false);
+    attempt_deposit_with_approved_tree(
+        &f,
+        DepositCall { table: &table_b, player: &player, amount: 100 },
+        DepositCall { table: &table_b, player: &player, amount: 100 },
+        false,
+    );
 }
 
 #[test]
@@ -336,7 +348,12 @@ fn deposit_authorization_cannot_move_between_players() {
     let vault_before = token::TokenClient::new(&f.env, &f.token).balance(&f.vault);
 
     f.env.set_auths(&[]);
-    attempt_deposit_with_approved_tree(&f, &table_id, &first, 100, &table_id, &second, 100, true);
+    attempt_deposit_with_approved_tree(
+        &f,
+        DepositCall { table: &table_id, player: &first, amount: 100 },
+        DepositCall { table: &table_id, player: &second, amount: 100 },
+        true,
+    );
     assert_deposit_unchanged(
         &f,
         &table_id,
@@ -347,7 +364,12 @@ fn deposit_authorization_cannot_move_between_players() {
         vault_before,
     );
 
-    attempt_deposit_with_approved_tree(&f, &table_id, &second, 100, &table_id, &second, 100, false);
+    attempt_deposit_with_approved_tree(
+        &f,
+        DepositCall { table: &table_id, player: &second, amount: 100 },
+        DepositCall { table: &table_id, player: &second, amount: 100 },
+        false,
+    );
 }
 
 #[test]
@@ -366,7 +388,12 @@ fn deposit_authorization_binds_amount_after_semantic_validation() {
     f.env.set_auths(&[]);
     // 200 is the valid required deposit, so this reaches authorization. The
     // supplied authorization tree is for the same table/player but amount 100.
-    attempt_deposit_with_approved_tree(&f, &table_id, &player, 100, &table_id, &player, 200, true);
+    attempt_deposit_with_approved_tree(
+        &f,
+        DepositCall { table: &table_id, player: &player, amount: 100 },
+        DepositCall { table: &table_id, player: &player, amount: 200 },
+        true,
+    );
     assert_deposit_unchanged(
         &f,
         &table_id,
@@ -377,7 +404,12 @@ fn deposit_authorization_binds_amount_after_semantic_validation() {
         vault_before,
     );
 
-    attempt_deposit_with_approved_tree(&f, &table_id, &player, 200, &table_id, &player, 200, false);
+    attempt_deposit_with_approved_tree(
+        &f,
+        DepositCall { table: &table_id, player: &player, amount: 200 },
+        DepositCall { table: &table_id, player: &player, amount: 200 },
+        false,
+    );
 }
 
 #[test]
@@ -428,23 +460,31 @@ fn deposit_nested_sac_transfer_preimage_is_not_independently_reusable() {
         vault_before,
     );
 
-    attempt_deposit_with_approved_tree(&f, &table_id, &player, 100, &table_id, &player, 100, false);
+    attempt_deposit_with_approved_tree(
+        &f,
+        DepositCall { table: &table_id, player: &player, amount: 100 },
+        DepositCall { table: &table_id, player: &player, amount: 100 },
+        false,
+    );
+}
+
+struct StartCall<'a> {
+    table: &'a BytesN<32>,
+    version: u64,
 }
 
 fn attempt_start_with_approved_tree(
     f: &Fixture,
     participants: &Vec<Participant>,
-    approved_table: &BytesN<32>,
-    approved_version: u64,
-    actual_table: &BytesN<32>,
-    actual_version: u64,
+    approved: StartCall<'_>,
+    actual: StartCall<'_>,
     include_second: bool,
     expect_failure: bool,
 ) {
     let invoke = MockAuthInvoke {
         contract: &f.vault,
         fn_name: "start_hand",
-        args: (approved_table.clone(), approved_version).into_val(&f.env),
+        args: (approved.table.clone(), approved_version).into_val(&f.env),
         sub_invokes: &[],
     };
     let first = participants.get(0).unwrap().player;
@@ -465,20 +505,20 @@ fn attempt_start_with_approved_tree(
             assert!(
                 client
                     .mock_auths(&auths)
-                    .try_start_hand(actual_table, &actual_version)
+                    .try_start_hand(actual.table, &actual.version)
                     .is_err()
             );
         } else {
             client
                 .mock_auths(&auths)
-                .start_hand(actual_table, &actual_version);
+                .start_hand(actual.table, &actual.version);
         }
     } else {
         let auths = [first_auth];
         assert!(
             client
                 .mock_auths(&auths)
-                .try_start_hand(actual_table, &actual_version)
+                .try_start_hand(actual.table, &actual.version)
                 .is_err()
         );
     }
@@ -499,13 +539,27 @@ fn start_hand_authorization_cannot_move_between_tables() {
     let backing_before = client.backing();
 
     f.env.set_auths(&[]);
-    attempt_start_with_approved_tree(&f, &players, &table_a, 0, &table_b, 0, true, true);
+    attempt_start_with_approved_tree(
+        &f,
+        &players,
+        StartCall { table: &table_a, version: 0 },
+        StartCall { table: &table_b, version: 0 },
+        true,
+        true,
+    );
     assert_eq!(client.table(&table_b), before);
     assert_eq!(client.backing(), backing_before);
 
     // A correct tree can still start the hand, proving the failed attempt did
     // not change phase or consume the table/version hand identity.
-    attempt_start_with_approved_tree(&f, &players, &table_b, 0, &table_b, 0, true, false);
+    attempt_start_with_approved_tree(
+        &f,
+        &players,
+        StartCall { table: &table_b, version: 0 },
+        StartCall { table: &table_b, version: 0 },
+        true,
+        false,
+    );
     assert!(matches!(
         client.table(&table_b).phase,
         TablePhase::Active(_)
@@ -528,11 +582,25 @@ fn start_hand_authorization_binds_expected_state_version() {
     let backing_before = client.backing();
 
     f.env.set_auths(&[]);
-    attempt_start_with_approved_tree(&f, &players, &table_id, 0, &table_id, 1, true, true);
+    attempt_start_with_approved_tree(
+        &f,
+        &players,
+        StartCall { table: &table_id, version: 0 },
+        StartCall { table: &table_id, version: 1 },
+        true,
+        true,
+    );
     assert_eq!(client.table(&table_id), before);
     assert_eq!(client.backing(), backing_before);
 
-    attempt_start_with_approved_tree(&f, &players, &table_id, 1, &table_id, 1, true, false);
+    attempt_start_with_approved_tree(
+        &f,
+        &players,
+        StartCall { table: &table_id, version: 1 },
+        StartCall { table: &table_id, version: 1 },
+        true,
+        false,
+    );
     assert!(matches!(
         client.table(&table_id).phase,
         TablePhase::Active(_)
@@ -552,11 +620,25 @@ fn start_hand_requires_the_complete_participant_authorization_set() {
     let backing_before = client.backing();
 
     f.env.set_auths(&[]);
-    attempt_start_with_approved_tree(&f, &players, &table_id, 0, &table_id, 0, false, true);
+    attempt_start_with_approved_tree(
+        &f,
+        &players,
+        StartCall { table: &table_id, version: 0 },
+        StartCall { table: &table_id, version: 0 },
+        false,
+        true,
+    );
     assert_eq!(client.table(&table_id), before);
     assert_eq!(client.backing(), backing_before);
 
-    attempt_start_with_approved_tree(&f, &players, &table_id, 0, &table_id, 0, true, false);
+    attempt_start_with_approved_tree(
+        &f,
+        &players,
+        StartCall { table: &table_id, version: 0 },
+        StartCall { table: &table_id, version: 0 },
+        true,
+        false,
+    );
     assert!(matches!(
         client.table(&table_id).phase,
         TablePhase::Active(_)
