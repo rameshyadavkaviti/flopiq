@@ -235,12 +235,7 @@ fn attempt_deposit_with_approved_tree(
     let transfer_invoke = MockAuthInvoke {
         contract: &f.token,
         fn_name: "transfer",
-        args: (
-            approved_player.clone(),
-            f.vault.clone(),
-            approved_amount,
-        )
-            .into_val(&f.env),
+        args: (approved_player.clone(), f.vault.clone(), approved_amount).into_val(&f.env),
         sub_invokes: &[],
     };
     let transfer_sub_invokes = [transfer_invoke];
@@ -312,9 +307,7 @@ fn deposit_authorization_cannot_move_between_tables() {
     let vault_before = token::TokenClient::new(&f.env, &f.token).balance(&f.vault);
 
     f.env.set_auths(&[]);
-    attempt_deposit_with_approved_tree(
-        &f, &table_a, &player, 100, &table_b, &player, 100, true,
-    );
+    attempt_deposit_with_approved_tree(&f, &table_a, &player, 100, &table_b, &player, 100, true);
     assert_deposit_unchanged(
         &f,
         &table_b,
@@ -325,9 +318,7 @@ fn deposit_authorization_cannot_move_between_tables() {
         vault_before,
     );
 
-    attempt_deposit_with_approved_tree(
-        &f, &table_b, &player, 100, &table_b, &player, 100, false,
-    );
+    attempt_deposit_with_approved_tree(&f, &table_b, &player, 100, &table_b, &player, 100, false);
 }
 
 #[test]
@@ -345,9 +336,7 @@ fn deposit_authorization_cannot_move_between_players() {
     let vault_before = token::TokenClient::new(&f.env, &f.token).balance(&f.vault);
 
     f.env.set_auths(&[]);
-    attempt_deposit_with_approved_tree(
-        &f, &table_id, &first, 100, &table_id, &second, 100, true,
-    );
+    attempt_deposit_with_approved_tree(&f, &table_id, &first, 100, &table_id, &second, 100, true);
     assert_deposit_unchanged(
         &f,
         &table_id,
@@ -358,9 +347,7 @@ fn deposit_authorization_cannot_move_between_players() {
         vault_before,
     );
 
-    attempt_deposit_with_approved_tree(
-        &f, &table_id, &second, 100, &table_id, &second, 100, false,
-    );
+    attempt_deposit_with_approved_tree(&f, &table_id, &second, 100, &table_id, &second, 100, false);
 }
 
 #[test]
@@ -379,9 +366,7 @@ fn deposit_authorization_binds_amount_after_semantic_validation() {
     f.env.set_auths(&[]);
     // 200 is the valid required deposit, so this reaches authorization. The
     // supplied authorization tree is for the same table/player but amount 100.
-    attempt_deposit_with_approved_tree(
-        &f, &table_id, &player, 100, &table_id, &player, 200, true,
-    );
+    attempt_deposit_with_approved_tree(&f, &table_id, &player, 100, &table_id, &player, 200, true);
     assert_deposit_unchanged(
         &f,
         &table_id,
@@ -392,9 +377,7 @@ fn deposit_authorization_binds_amount_after_semantic_validation() {
         vault_before,
     );
 
-    attempt_deposit_with_approved_tree(
-        &f, &table_id, &player, 200, &table_id, &player, 200, false,
-    );
+    attempt_deposit_with_approved_tree(&f, &table_id, &player, 200, &table_id, &player, 200, false);
 }
 
 #[test]
@@ -445,9 +428,7 @@ fn deposit_nested_sac_transfer_preimage_is_not_independently_reusable() {
         vault_before,
     );
 
-    attempt_deposit_with_approved_tree(
-        &f, &table_id, &player, 100, &table_id, &player, 100, false,
-    );
+    attempt_deposit_with_approved_tree(&f, &table_id, &player, 100, &table_id, &player, 100, false);
 }
 
 fn attempt_start_with_approved_tree(
@@ -518,17 +499,13 @@ fn start_hand_authorization_cannot_move_between_tables() {
     let backing_before = client.backing();
 
     f.env.set_auths(&[]);
-    attempt_start_with_approved_tree(
-        &f, &players, &table_a, 0, &table_b, 0, true, true,
-    );
+    attempt_start_with_approved_tree(&f, &players, &table_a, 0, &table_b, 0, true, true);
     assert_eq!(client.table(&table_b), before);
     assert_eq!(client.backing(), backing_before);
 
     // A correct tree can still start the hand, proving the failed attempt did
     // not change phase or consume the table/version hand identity.
-    attempt_start_with_approved_tree(
-        &f, &players, &table_b, 0, &table_b, 0, true, false,
-    );
+    attempt_start_with_approved_tree(&f, &players, &table_b, 0, &table_b, 0, true, false);
     assert!(matches!(
         client.table(&table_b).phase,
         TablePhase::Active(_)
@@ -551,15 +528,11 @@ fn start_hand_authorization_binds_expected_state_version() {
     let backing_before = client.backing();
 
     f.env.set_auths(&[]);
-    attempt_start_with_approved_tree(
-        &f, &players, &table_id, 0, &table_id, 1, true, true,
-    );
+    attempt_start_with_approved_tree(&f, &players, &table_id, 0, &table_id, 1, true, true);
     assert_eq!(client.table(&table_id), before);
     assert_eq!(client.backing(), backing_before);
 
-    attempt_start_with_approved_tree(
-        &f, &players, &table_id, 1, &table_id, 1, true, false,
-    );
+    attempt_start_with_approved_tree(&f, &players, &table_id, 1, &table_id, 1, true, false);
     assert!(matches!(
         client.table(&table_id).phase,
         TablePhase::Active(_)
@@ -579,15 +552,11 @@ fn start_hand_requires_the_complete_participant_authorization_set() {
     let backing_before = client.backing();
 
     f.env.set_auths(&[]);
-    attempt_start_with_approved_tree(
-        &f, &players, &table_id, 0, &table_id, 0, false, true,
-    );
+    attempt_start_with_approved_tree(&f, &players, &table_id, 0, &table_id, 0, false, true);
     assert_eq!(client.table(&table_id), before);
     assert_eq!(client.backing(), backing_before);
 
-    attempt_start_with_approved_tree(
-        &f, &players, &table_id, 0, &table_id, 0, true, false,
-    );
+    attempt_start_with_approved_tree(&f, &players, &table_id, 0, &table_id, 0, true, false);
     assert!(matches!(
         client.table(&table_id).phase,
         TablePhase::Active(_)
