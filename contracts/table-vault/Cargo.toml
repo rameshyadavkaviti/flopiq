@@ -1,12 +1,12 @@
 [package]
-name = "flopiq-table-state"
+name = "flopiq-table-vault"
 version = "0.1.0"
-edition = "2021"
-rust-version = "1.91"
+edition = "2024"
 publish = false
 
 [lib]
 crate-type = ["cdylib", "rlib"]
+doctest = false
 
 [dependencies]
 flopiq-settlement-types = { path = "../settlement-types" }
@@ -14,3 +14,6 @@ soroban-sdk = { workspace = true }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(testutils)'] }
