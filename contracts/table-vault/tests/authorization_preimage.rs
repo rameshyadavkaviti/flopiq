@@ -311,8 +311,16 @@ fn deposit_authorization_cannot_move_between_tables() {
     f.env.set_auths(&[]);
     attempt_deposit_with_approved_tree(
         &f,
-        DepositCall { table: &table_a, player: &player, amount: 100 },
-        DepositCall { table: &table_b, player: &player, amount: 100 },
+        DepositCall {
+            table: &table_a,
+            player: &player,
+            amount: 100,
+        },
+        DepositCall {
+            table: &table_b,
+            player: &player,
+            amount: 100,
+        },
         true,
     );
     assert_deposit_unchanged(
@@ -327,8 +335,16 @@ fn deposit_authorization_cannot_move_between_tables() {
 
     attempt_deposit_with_approved_tree(
         &f,
-        DepositCall { table: &table_b, player: &player, amount: 100 },
-        DepositCall { table: &table_b, player: &player, amount: 100 },
+        DepositCall {
+            table: &table_b,
+            player: &player,
+            amount: 100,
+        },
+        DepositCall {
+            table: &table_b,
+            player: &player,
+            amount: 100,
+        },
         false,
     );
 }
@@ -350,8 +366,16 @@ fn deposit_authorization_cannot_move_between_players() {
     f.env.set_auths(&[]);
     attempt_deposit_with_approved_tree(
         &f,
-        DepositCall { table: &table_id, player: &first, amount: 100 },
-        DepositCall { table: &table_id, player: &second, amount: 100 },
+        DepositCall {
+            table: &table_id,
+            player: &first,
+            amount: 100,
+        },
+        DepositCall {
+            table: &table_id,
+            player: &second,
+            amount: 100,
+        },
         true,
     );
     assert_deposit_unchanged(
@@ -366,8 +390,16 @@ fn deposit_authorization_cannot_move_between_players() {
 
     attempt_deposit_with_approved_tree(
         &f,
-        DepositCall { table: &table_id, player: &second, amount: 100 },
-        DepositCall { table: &table_id, player: &second, amount: 100 },
+        DepositCall {
+            table: &table_id,
+            player: &second,
+            amount: 100,
+        },
+        DepositCall {
+            table: &table_id,
+            player: &second,
+            amount: 100,
+        },
         false,
     );
 }
@@ -390,8 +422,16 @@ fn deposit_authorization_binds_amount_after_semantic_validation() {
     // supplied authorization tree is for the same table/player but amount 100.
     attempt_deposit_with_approved_tree(
         &f,
-        DepositCall { table: &table_id, player: &player, amount: 100 },
-        DepositCall { table: &table_id, player: &player, amount: 200 },
+        DepositCall {
+            table: &table_id,
+            player: &player,
+            amount: 100,
+        },
+        DepositCall {
+            table: &table_id,
+            player: &player,
+            amount: 200,
+        },
         true,
     );
     assert_deposit_unchanged(
@@ -406,8 +446,16 @@ fn deposit_authorization_binds_amount_after_semantic_validation() {
 
     attempt_deposit_with_approved_tree(
         &f,
-        DepositCall { table: &table_id, player: &player, amount: 200 },
-        DepositCall { table: &table_id, player: &player, amount: 200 },
+        DepositCall {
+            table: &table_id,
+            player: &player,
+            amount: 200,
+        },
+        DepositCall {
+            table: &table_id,
+            player: &player,
+            amount: 200,
+        },
         false,
     );
 }
@@ -462,8 +510,16 @@ fn deposit_nested_sac_transfer_preimage_is_not_independently_reusable() {
 
     attempt_deposit_with_approved_tree(
         &f,
-        DepositCall { table: &table_id, player: &player, amount: 100 },
-        DepositCall { table: &table_id, player: &player, amount: 100 },
+        DepositCall {
+            table: &table_id,
+            player: &player,
+            amount: 100,
+        },
+        DepositCall {
+            table: &table_id,
+            player: &player,
+            amount: 100,
+        },
         false,
     );
 }
@@ -542,8 +598,14 @@ fn start_hand_authorization_cannot_move_between_tables() {
     attempt_start_with_approved_tree(
         &f,
         &players,
-        StartCall { table: &table_a, version: 0 },
-        StartCall { table: &table_b, version: 0 },
+        StartCall {
+            table: &table_a,
+            version: 0,
+        },
+        StartCall {
+            table: &table_b,
+            version: 0,
+        },
         true,
         true,
     );
@@ -555,8 +617,14 @@ fn start_hand_authorization_cannot_move_between_tables() {
     attempt_start_with_approved_tree(
         &f,
         &players,
-        StartCall { table: &table_b, version: 0 },
-        StartCall { table: &table_b, version: 0 },
+        StartCall {
+            table: &table_b,
+            version: 0,
+        },
+        StartCall {
+            table: &table_b,
+            version: 0,
+        },
         true,
         false,
     );
@@ -585,8 +653,14 @@ fn start_hand_authorization_binds_expected_state_version() {
     attempt_start_with_approved_tree(
         &f,
         &players,
-        StartCall { table: &table_id, version: 0 },
-        StartCall { table: &table_id, version: 1 },
+        StartCall {
+            table: &table_id,
+            version: 0,
+        },
+        StartCall {
+            table: &table_id,
+            version: 1,
+        },
         true,
         true,
     );
@@ -596,8 +670,14 @@ fn start_hand_authorization_binds_expected_state_version() {
     attempt_start_with_approved_tree(
         &f,
         &players,
-        StartCall { table: &table_id, version: 1 },
-        StartCall { table: &table_id, version: 1 },
+        StartCall {
+            table: &table_id,
+            version: 1,
+        },
+        StartCall {
+            table: &table_id,
+            version: 1,
+        },
         true,
         false,
     );
@@ -623,8 +703,14 @@ fn start_hand_requires_the_complete_participant_authorization_set() {
     attempt_start_with_approved_tree(
         &f,
         &players,
-        StartCall { table: &table_id, version: 0 },
-        StartCall { table: &table_id, version: 0 },
+        StartCall {
+            table: &table_id,
+            version: 0,
+        },
+        StartCall {
+            table: &table_id,
+            version: 0,
+        },
         false,
         true,
     );
@@ -634,8 +720,14 @@ fn start_hand_requires_the_complete_participant_authorization_set() {
     attempt_start_with_approved_tree(
         &f,
         &players,
-        StartCall { table: &table_id, version: 0 },
-        StartCall { table: &table_id, version: 0 },
+        StartCall {
+            table: &table_id,
+            version: 0,
+        },
+        StartCall {
+            table: &table_id,
+            version: 0,
+        },
         true,
         false,
     );
