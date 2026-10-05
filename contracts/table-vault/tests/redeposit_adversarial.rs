@@ -310,8 +310,7 @@ fn collateral_overflow_after_valid_liability_addition_fails_before_auth_or_trans
     // liabilities == 100, while unsolicited selected-SAC surplus pushes
     // collateral to i128::MAX. Adding 1 to liabilities is valid; adding 1 to
     // collateral is not.
-    token::StellarAssetClient::new(&f.env, &f.token)
-        .mint(&f.vault, &(i128::MAX - 100));
+    token::StellarAssetClient::new(&f.env, &f.token).mint(&f.vault, &(i128::MAX - 100));
     assert_eq!(
         client.backing(),
         Backing {
