@@ -2,9 +2,9 @@
 
 Phase 2 now includes the non-custodial settlement-state foundation and an
 **authenticated, SAC-backed local-test TableVault**. Phase 2 is not complete.
-The vault includes only a bounded, player-authorized full exit from a ready table,
-not a production leave-table lifecycle or production settlement authority. Do not
-deploy it with real funds.
+The vault includes bounded, player-authorized full exit from a ready table plus
+zero-stack redeposit for retained participants; it is still not a production
+leave/rebuy lifecycle or production settlement authority. Do not deploy it with real funds.
 
 ## Tooling
 
