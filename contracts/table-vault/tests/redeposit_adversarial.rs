@@ -1,5 +1,5 @@
 use flopiq_settlement_types::Participant;
-use flopiq_table_vault::{Backing, TableProposal, TableVault, TableVaultArgs, TableVaultClient};
+use flopiq_table_vault::{Backing, TableProposal, TableVault, TableVaultArgs, TableVaultClient, VaultError};
 use soroban_sdk::{
     Address, BytesN, Env, IntoVal, Vec,
     testutils::{Address as _, MockAuth, MockAuthInvoke},
@@ -315,7 +315,10 @@ fn collateral_overflow_after_valid_liability_addition_fails_before_auth_or_trans
     let vault_before = token_client.balance(&f.vault);
     f.env.set_auths(&[]);
 
-    assert!(client.try_redeposit(&f.table, &player, &1, &1).is_err());
+    assert_eq!(
+        client.try_redeposit(&f.table, &player, &1, &1),
+        Err(Ok(VaultError::Amount))
+    );
     assert_unchanged(
         &f,
         &f.table,
