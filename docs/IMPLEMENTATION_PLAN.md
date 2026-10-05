@@ -116,7 +116,7 @@ These limits do not pull later infrastructure phases forward.
 
 ### Phase boundary
 
-Do not recreate already-completed Phase 1 slices. The next roadmap phase is **Phase 2 — Soroban**. Work on Soroban should begin as a separate phase with its own bounded contract tasks and security review.
+Do not recreate already-completed Phase 1 slices. **Phase 2 — Soroban is already active and partially implemented on `main`.** Continue to treat Soroban changes as bounded contract tasks with security review; do not restart the phase from its original foundation.
 
 ---
 
@@ -169,7 +169,23 @@ The repository contains:
 - `docs/SOROBAN_ARCHITECTURE.md` — custody/contract/security boundaries,
 - `docs/SETTLEMENT_PROTOCOL.md` — canonical completed-hand settlement payload and invariants.
 
-These files are the source of truth for the first Soroban implementation slices. They intentionally contain no production financial contract logic yet.
+These files remain the source of truth for the Phase 2 contract boundary. Merged code now includes local/test Soroban financial state transitions and a test-SAC-backed TableVault, but not production custody, final settlement authority, or the complete target contract set.
+
+### Phase 2 implementation status on `main`
+
+This status maps merged repository reality to the original Phase 2 sequence without changing the target architecture:
+
+| Slice | Status | Current merged reality |
+| --- | --- | --- |
+| 2A. Freeze settlement types + contract workspace | `Implemented` | Rust workspace, shared settlement types, canonical validation, and local contract foundations exist. |
+| 2B. TableVault state/custody core | `Partial` | Local/test TableVault supports authenticated allocation, exact test-SAC deposits, version-bound hand lifecycle, conserved settlement, Ready-state full exit, and retained zero-stack redeposit. Production custody/lifecycle remains incomplete. |
+| 2C. Settlement replay/version/conservation core | `Partial` | Replay, version, participant/state matching, zero-rake conservation, and settlement commitment behavior are implemented in the local/test contracts; the final production settlement authority is not. |
+| 2D. Treasury/Rake boundary | `Not started` | Rake remains disabled at zero and no Treasury/Rake contract boundary is implemented. |
+| 2E. Cashier boundary with test asset | `Not started` | No Cashier conversion boundary is implemented. |
+| 2F. Cross-contract integration tests | `Partial` | TableVault integrates the shared settlement types and a test SAC locally, but the planned Treasury/Rake/Cashier cross-contract flow does not yet exist. |
+| 2G. Testnet deployment after local review | `Deferred` | Current contracts are documented and tested as local/test foundations and are not approved for real funds or production deployment. |
+
+These labels describe implementation status only. They do not declare Phase 2 complete.
 
 ---
 
@@ -326,20 +342,17 @@ Parallel agents must not knowingly modify the same branch/PR or overlapping impl
 
 ---
 
-## 11. Immediate next work
+## 11. Current work boundary
 
-Phase 1 has reached its approved completion condition: a full heads-up hand can be executed and verified end-to-end through settlement and the next-hand transition using the local development harness.
+Phase 1 has reached its approved completion condition, and Phase 2 is already partially implemented on `main`. The original Phase 2A foundation is no longer an upcoming task and must not be recreated.
 
-The next roadmap phase is **Phase 2 — Soroban**.
-
-The repository boundary is prepared. The first implementation slice should be **Phase 2A: freeze concrete settlement types and create the first bounded Soroban contract crate(s)** from the approved protocol documents.
-
-Before implementation:
+Before assigning further Soroban implementation work:
 
 1. inspect current `main`, open PRs, and CI,
-2. read `docs/SOROBAN_ARCHITECTURE.md` and `docs/SETTLEMENT_PROTOCOL.md`,
-3. verify the then-current Stellar CLI, Soroban SDK, and target network protocol,
-4. keep Poker Core unchanged unless a genuine protocol contradiction is discovered,
-5. use local contract tests before any network deployment.
+2. use the Phase 2 status table above to distinguish merged implementation from target architecture,
+3. read `docs/SOROBAN_ARCHITECTURE.md` and `docs/SETTLEMENT_PROTOCOL.md`,
+4. verify the then-current Stellar CLI, Soroban SDK, and target network protocol before version-specific work,
+5. keep Poker Core unchanged unless a genuine protocol contradiction is discovered,
+6. continue using local contract tests before any network deployment.
 
-Do not jump directly to production CHIP, wallet, MPC, or mainnet integration.
+This document intentionally does **not** select the next production financial feature. Any next Soroban slice must be chosen from current repository reality and the approved architecture, with production custody, wallet/CHIP integration, final settlement authority, MPC/fairness binding, and mainnet deployment still treated as unfinished or deferred where applicable.
