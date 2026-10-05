@@ -85,7 +85,7 @@ fn redeposit_with_tree(
     approved: RedepositCall<'_>,
     approved_transfer_amount: i128,
     actual: RedepositCall<'_>,
-) -> Result<(), soroban_sdk::Error> {
+) -> bool {
     let transfer = MockAuthInvoke {
         contract: &f.token,
         fn_name: "transfer",
@@ -117,7 +117,7 @@ fn redeposit_with_tree(
     TableVaultClient::new(&f.env, &f.vault)
         .mock_auths(&auths)
         .try_redeposit(actual.table, actual.player, &actual.amount, &actual.version)
-        .map_err(|error| error.unwrap())
+        .is_err()
 }
 
 fn assert_unchanged(
@@ -170,7 +170,6 @@ fn redeposit_authorization_cannot_cross_tables() {
                 version: 1,
             },
         )
-        .is_err()
     );
     assert_unchanged(
         &f,
@@ -215,7 +214,6 @@ fn redeposit_authorization_cannot_cross_players_or_versions() {
                 version: 2,
             },
         )
-        .is_err()
     );
     assert_unchanged(
         &f,
@@ -244,7 +242,6 @@ fn redeposit_authorization_cannot_cross_players_or_versions() {
                 version: 2,
             },
         )
-        .is_err()
     );
     assert_unchanged(
         &f,
@@ -287,7 +284,6 @@ fn redeposit_nested_sac_transfer_must_match_the_authorized_tree() {
                 version: 1,
             },
         )
-        .is_err()
     );
     assert_unchanged(
         &f,
