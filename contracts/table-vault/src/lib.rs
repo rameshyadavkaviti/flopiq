@@ -8,8 +8,8 @@ use soroban_sdk::{
     Address, BytesN, Env, Executable, contract, contractimpl, contracttype, token, xdr::ToXdr,
 };
 pub use types::{
-    Backing, Deposited, Exited, HandStarted, SettlementCommitted, Table, TableCreated, TablePhase,
-    TableProposal, VaultError,
+    Backing, Deposited, Exited, HandStarted, Redeposited, SettlementCommitted, Table, TableCreated,
+    TablePhase, TableProposal, VaultError,
 };
 
 #[contracttype]
@@ -266,6 +266,80 @@ impl TableVault {
         }
         .publish(&env);
         Ok(amount)
+    }
+
+    /// Restores a retained zero-stack participant's Ready-table claim by
+    /// transferring the bound SAC into the vault. This is not a general rebuy.
+    pub fn redeposit(
+        env: Env,
+        table_id: BytesN<32>,
+        player: Address,
+        amount: i128,
+        expected_state_version: u64,
+    ) -> Result<(), VaultError> {
+        if amount <= 0 {
+            return Err(VaultError::Amount);
+        }
+        let mut table = load_table(&env, &table_id)?;
+        if table.phase != TablePhase::Ready {
+            return Err(VaultError::Phase);
+        }
+        if table.state.version != expected_state_version || expected_state_version == u64::MAX {
+            return Err(VaultError::Version);
+        }
+
+        let mut player_index = None;
+        for (index, participant) in table.state.participants.iter().enumerate() {
+            if participant.player == player {
+                player_index = Some(index as u32);
+                break;
+            }
+        }
+        let index = player_index.ok_or(VaultError::Participants)?;
+        let current_stack = table.state.stacks.get(index).ok_or(VaultError::Storage)?;
+        if current_stack != 0 {
+            return Err(VaultError::ExistingLiability);
+        }
+
+        let before = checked_backing(&env)?;
+        let next_liabilities = before
+            .liabilities
+            .checked_add(amount)
+            .ok_or(VaultError::Amount)?;
+        let expected_collateral = before
+            .collateral
+            .checked_add(amount)
+            .ok_or(VaultError::Amount)?;
+        let next_state_version = expected_state_version
+            .checked_add(1)
+            .ok_or(VaultError::Version)?;
+
+        player.require_auth();
+
+        let token = token_address(&env)?;
+        let vault = env.current_contract_address();
+        token::TokenClient::new(&env, &token).transfer(&player, &vault, &amount);
+        let after_collateral = token::TokenClient::new(&env, &token).balance(&vault);
+        if after_collateral != expected_collateral {
+            return Err(VaultError::Insolvent);
+        }
+
+        table.state.stacks.set(index, amount);
+        table.state.version = next_state_version;
+        env.storage()
+            .persistent()
+            .set(&Key::Table(table_id.clone()), &table);
+        env.storage()
+            .persistent()
+            .set(&Key::Liabilities, &next_liabilities);
+        Redeposited {
+            table_id,
+            player,
+            amount,
+            next_state_version,
+        }
+        .publish(&env);
+        Ok(())
     }
 
     pub fn commit(env: Env, settlement: Settlement) -> Result<(), VaultError> {

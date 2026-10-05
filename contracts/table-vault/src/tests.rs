@@ -40,6 +40,29 @@ impl AbortAfterExit {
     }
 }
 
+#[contract]
+struct AbortAfterRedeposit;
+
+#[contractimpl]
+impl AbortAfterRedeposit {
+    pub fn invoke(
+        env: Env,
+        vault: Address,
+        table_id: BytesN<32>,
+        player: Address,
+        amount: i128,
+        expected_state_version: u64,
+    ) -> Result<(), VaultError> {
+        TableVaultClient::new(&env, &vault).redeposit(
+            &table_id,
+            &player,
+            &amount,
+            &expected_state_version,
+        );
+        Err(VaultError::Storage)
+    }
+}
+
 struct Fixture {
     env: Env,
     vault: Address,
@@ -954,4 +977,447 @@ fn full_exit_supports_large_i128_balance() {
         token::TokenClient::new(&f.env, &f.token).balance(&first),
         i128::MAX - 1
     );
+}
+
+#[test]
+fn zero_stack_redeposit_restores_exact_claim_and_emits_typed_event() {
+    use soroban_sdk::{Event, testutils::Events};
+
+    let f = fixture(2, 100);
+    fund(&f);
+    let client = TableVaultClient::new(&f.env, &f.vault);
+    let player = f.participants.get(0).unwrap().player;
+    client.exit(&f.table_id, &player, &0);
+    let before = client.table(&f.table_id);
+    let player_balance = token::TokenClient::new(&f.env, &f.token).balance(&player);
+
+    client.redeposit(&f.table_id, &player, &75, &1);
+
+    let expected = Redeposited {
+        table_id: f.table_id.clone(),
+        player: player.clone(),
+        amount: 75,
+        next_state_version: 2,
+    };
+    assert_eq!(
+        f.env.events().all().filter_by_contract(&f.vault),
+        vec![
+            &f.env,
+            (
+                f.vault.clone(),
+                expected.topics(&f.env),
+                expected.data(&f.env)
+            )
+        ]
+    );
+    let after = client.table(&f.table_id);
+    assert_eq!(after.phase, TablePhase::Ready);
+    assert_eq!(after.state.version, 2);
+    assert_eq!(after.state.stacks, vec![&f.env, 75, 100]);
+    assert_eq!(after.state.participants, before.state.participants);
+    assert_eq!(after.remaining_buy_ins, before.remaining_buy_ins);
+    assert_eq!(
+        token::TokenClient::new(&f.env, &f.token).balance(&player),
+        player_balance - 75
+    );
+    assert_eq!(
+        client.backing(),
+        Backing {
+            collateral: 175,
+            liabilities: 175,
+            surplus: 0,
+        }
+    );
+    assert_eq!(after.state.stacks.iter().sum::<i128>(), 175);
+}
+
+#[test]
+fn redeposit_requires_exact_players_exact_invocation_authorization() {
+    let f = fixture(2, 100);
+    fund(&f);
+    let client = TableVaultClient::new(&f.env, &f.vault);
+    let player = f.participants.get(0).unwrap().player;
+    let attacker = f.participants.get(1).unwrap().player;
+    client.exit(&f.table_id, &player, &0);
+    let table_before = client.table(&f.table_id);
+    let backing_before = client.backing();
+    let player_before = token::TokenClient::new(&f.env, &f.token).balance(&player);
+    f.env.set_auths(&[]);
+
+    assert!(client.try_redeposit(&f.table_id, &player, &50, &1).is_err());
+    let transfer_invoke = MockAuthInvoke {
+        contract: &f.token,
+        fn_name: "transfer",
+        args: (player.clone(), f.vault.clone(), 50_i128).into_val(&f.env),
+        sub_invokes: &[],
+    };
+    let transfer_invokes = [transfer_invoke];
+    let exact_invoke = MockAuthInvoke {
+        contract: &f.vault,
+        fn_name: "redeposit",
+        args: (f.table_id.clone(), player.clone(), 50_i128, 1_u64).into_val(&f.env),
+        sub_invokes: &transfer_invokes,
+    };
+    assert!(
+        client
+            .mock_auths(&[MockAuth {
+                address: &attacker,
+                invoke: &exact_invoke,
+            }])
+            .try_redeposit(&f.table_id, &player, &50, &1)
+            .is_err()
+    );
+    let wrong_root_invoke = MockAuthInvoke {
+        contract: &f.vault,
+        fn_name: "redeposit",
+        args: (f.table_id.clone(), player.clone(), 51_i128, 1_u64).into_val(&f.env),
+        sub_invokes: &transfer_invokes,
+    };
+    assert!(
+        client
+            .mock_auths(&[MockAuth {
+                address: &player,
+                invoke: &wrong_root_invoke,
+            }])
+            .try_redeposit(&f.table_id, &player, &50, &1)
+            .is_err()
+    );
+    assert_eq!(client.table(&f.table_id), table_before);
+    assert_eq!(client.backing(), backing_before);
+    assert_eq!(
+        token::TokenClient::new(&f.env, &f.token).balance(&player),
+        player_before
+    );
+
+    client
+        .mock_auths(&[MockAuth {
+            address: &player,
+            invoke: &exact_invoke,
+        }])
+        .redeposit(&f.table_id, &player, &50, &1);
+    assert_eq!(
+        client.table(&f.table_id).state.stacks,
+        vec![&f.env, 50, 100]
+    );
+    assert_eq!(client.table(&f.table_id).state.version, 2);
+    assert_eq!(client.backing().liabilities, 150);
+}
+
+#[test]
+fn redeposit_rejects_wrong_lifecycle_identity_amount_and_version() {
+    let f = fixture(2, 100);
+    let client = TableVaultClient::new(&f.env, &f.vault);
+    let player = f.participants.get(0).unwrap().player;
+    assert_eq!(
+        client.try_redeposit(&f.table_id, &player, &50, &0),
+        Err(Ok(VaultError::Phase))
+    );
+
+    fund(&f);
+    assert_eq!(
+        client.try_redeposit(&f.table_id, &player, &50, &0),
+        Err(Ok(VaultError::ExistingLiability))
+    );
+    client.start_hand(&f.table_id, &0);
+    assert_eq!(
+        client.try_redeposit(&f.table_id, &player, &50, &0),
+        Err(Ok(VaultError::Phase))
+    );
+    let hand = match client.table(&f.table_id).phase {
+        TablePhase::Active(hand) => hand,
+        _ => panic!("expected active table"),
+    };
+    client.commit(&settlement(&f, hand, vec![&f.env, 100, 100]));
+    client.exit(&f.table_id, &player, &1);
+    let table_before = client.table(&f.table_id);
+    let unknown = Address::generate(&f.env);
+    let unknown_table = BytesN::from_array(&f.env, &[91; 32]);
+
+    assert_eq!(
+        client.try_redeposit(&unknown_table, &player, &50, &2),
+        Err(Ok(VaultError::UnknownTable))
+    );
+    assert_eq!(
+        client.try_redeposit(&f.table_id, &unknown, &50, &2),
+        Err(Ok(VaultError::Participants))
+    );
+    assert_eq!(
+        client.try_redeposit(&f.table_id, &player, &0, &2),
+        Err(Ok(VaultError::Amount))
+    );
+    assert_eq!(
+        client.try_redeposit(&f.table_id, &player, &-1, &2),
+        Err(Ok(VaultError::Amount))
+    );
+    for bad_version in [1_u64, 3_u64, u64::MAX] {
+        assert_eq!(
+            client.try_redeposit(&f.table_id, &player, &50, &bad_version),
+            Err(Ok(VaultError::Version))
+        );
+    }
+    assert_eq!(client.table(&f.table_id), table_before);
+    assert_eq!(client.backing().liabilities, 100);
+}
+
+#[test]
+fn successful_redeposit_cannot_be_replayed_or_used_as_a_top_up() {
+    let f = fixture(2, 100);
+    fund(&f);
+    let client = TableVaultClient::new(&f.env, &f.vault);
+    let player = f.participants.get(0).unwrap().player;
+    client.exit(&f.table_id, &player, &0);
+    client.redeposit(&f.table_id, &player, &50, &1);
+    let table_before = client.table(&f.table_id);
+    let backing_before = client.backing();
+
+    assert_eq!(
+        client.try_redeposit(&f.table_id, &player, &50, &1),
+        Err(Ok(VaultError::Version))
+    );
+    assert_eq!(
+        client.try_redeposit(&f.table_id, &player, &50, &2),
+        Err(Ok(VaultError::ExistingLiability))
+    );
+    assert_eq!(client.table(&f.table_id), table_before);
+    assert_eq!(client.backing(), backing_before);
+}
+
+#[test]
+fn insolvent_vault_rejects_redeposit_before_auth_or_sac_movement() {
+    let f = fixture(2, 100);
+    fund(&f);
+    let client = TableVaultClient::new(&f.env, &f.vault);
+    let player = f.participants.get(0).unwrap().player;
+    client.exit(&f.table_id, &player, &0);
+    token::StellarAssetClient::new(&f.env, &f.token).clawback(&f.vault, &1);
+    let table_before = client.table(&f.table_id);
+    let vault_before = token::TokenClient::new(&f.env, &f.token).balance(&f.vault);
+    let player_before = token::TokenClient::new(&f.env, &f.token).balance(&player);
+    f.env.set_auths(&[]);
+
+    assert_eq!(
+        client.try_redeposit(&f.table_id, &player, &50, &1),
+        Err(Ok(VaultError::Insolvent))
+    );
+    assert_eq!(client.table(&f.table_id), table_before);
+    assert_eq!(client.table(&f.table_id).phase, TablePhase::Ready);
+    assert_eq!(client.table(&f.table_id).state.version, 1);
+    assert_eq!(client.table(&f.table_id).state.stacks, vec![&f.env, 0, 100]);
+    assert_eq!(
+        token::TokenClient::new(&f.env, &f.token).balance(&f.vault),
+        vault_before
+    );
+    assert_eq!(
+        token::TokenClient::new(&f.env, &f.token).balance(&player),
+        player_before
+    );
+    assert_eq!(client.try_backing(), Err(Ok(VaultError::Insolvent)));
+}
+
+#[test]
+fn failed_sac_transfer_rolls_back_redeposit_financial_state() {
+    let f = fixture(2, 100);
+    fund(&f);
+    let client = TableVaultClient::new(&f.env, &f.vault);
+    let player = f.participants.get(0).unwrap().player;
+    client.exit(&f.table_id, &player, &0);
+    let amount = token::TokenClient::new(&f.env, &f.token).balance(&player) + 1;
+    let table_before = client.table(&f.table_id);
+    let backing_before = client.backing();
+    let vault_before = token::TokenClient::new(&f.env, &f.token).balance(&f.vault);
+    let player_before = token::TokenClient::new(&f.env, &f.token).balance(&player);
+
+    assert!(
+        client
+            .try_redeposit(&f.table_id, &player, &amount, &1)
+            .is_err()
+    );
+    assert_eq!(client.table(&f.table_id), table_before);
+    assert_eq!(client.backing(), backing_before);
+    assert_eq!(
+        token::TokenClient::new(&f.env, &f.token).balance(&f.vault),
+        vault_before
+    );
+    assert_eq!(
+        token::TokenClient::new(&f.env, &f.token).balance(&player),
+        player_before
+    );
+}
+
+#[test]
+fn enclosing_failure_rolls_back_redeposit_and_sac_transfer() {
+    let f = fixture(2, 100);
+    fund(&f);
+    let client = TableVaultClient::new(&f.env, &f.vault);
+    let player = f.participants.get(0).unwrap().player;
+    client.exit(&f.table_id, &player, &0);
+    let abort = f.env.register(AbortAfterRedeposit, ());
+    let abort_client = AbortAfterRedepositClient::new(&f.env, &abort);
+    let table_before = client.table(&f.table_id);
+    let backing_before = client.backing();
+    let player_before = token::TokenClient::new(&f.env, &f.token).balance(&player);
+
+    assert_eq!(
+        abort_client.try_invoke(&f.vault, &f.table_id, &player, &50, &1),
+        Err(Ok(VaultError::Storage))
+    );
+    assert_eq!(client.table(&f.table_id), table_before);
+    assert_eq!(client.backing(), backing_before);
+    assert_eq!(
+        token::TokenClient::new(&f.env, &f.token).balance(&player),
+        player_before
+    );
+}
+
+#[test]
+fn redeposit_preserves_surplus_wrong_asset_and_table_participant_isolation() {
+    let f = fixture(2, 100);
+    fund(&f);
+    let client = TableVaultClient::new(&f.env, &f.vault);
+    let mut other_proposal = f.proposal.clone();
+    other_proposal.nonce = BytesN::from_array(&f.env, &[92; 32]);
+    let other_table = client.create_table(&other_proposal);
+    for participant in f.participants.iter() {
+        client.deposit(&other_table, &participant.player, &100);
+    }
+    let player = f.participants.get(0).unwrap().player;
+    let other_player = f.participants.get(1).unwrap().player;
+    client.exit(&f.table_id, &player, &0);
+    token::StellarAssetClient::new(&f.env, &f.token).mint(&f.vault, &25);
+    let wrong_sac = f
+        .env
+        .register_stellar_asset_contract_v2(Address::generate(&f.env));
+    let wrong_token = wrong_sac.address();
+    token::StellarAssetClient::new(&f.env, &wrong_token).mint(&f.vault, &40);
+    let other_table_before = client.table(&other_table);
+    let other_player_before = token::TokenClient::new(&f.env, &f.token).balance(&other_player);
+
+    client.redeposit(&f.table_id, &player, &60, &1);
+
+    assert_eq!(
+        client.table(&f.table_id).state.stacks,
+        vec![&f.env, 60, 100]
+    );
+    assert_eq!(client.table(&f.table_id).state.version, 2);
+    assert_eq!(client.table(&other_table), other_table_before);
+    assert_eq!(
+        token::TokenClient::new(&f.env, &f.token).balance(&other_player),
+        other_player_before
+    );
+    assert_eq!(
+        client.backing(),
+        Backing {
+            collateral: 385,
+            liabilities: 360,
+            surplus: 25,
+        }
+    );
+    assert_eq!(
+        token::TokenClient::new(&f.env, &wrong_token).balance(&f.vault),
+        40
+    );
+}
+
+#[test]
+fn sequential_redeposits_reenable_hand_from_post_redeposit_version() {
+    let f = fixture(2, 100);
+    fund(&f);
+    let client = TableVaultClient::new(&f.env, &f.vault);
+    let first = f.participants.get(0).unwrap().player;
+    let second = f.participants.get(1).unwrap().player;
+    client.exit(&f.table_id, &first, &0);
+    client.exit(&f.table_id, &second, &1);
+
+    client.redeposit(&f.table_id, &first, &50, &2);
+    assert_eq!(
+        client.try_start_hand(&f.table_id, &3),
+        Err(Ok(VaultError::Phase))
+    );
+    client.redeposit(&f.table_id, &second, &60, &3);
+    assert_eq!(client.table(&f.table_id).state.version, 4);
+    assert_eq!(client.table(&f.table_id).state.stacks, vec![&f.env, 50, 60]);
+    assert_eq!(client.backing().liabilities, 110);
+    assert_eq!(
+        client.try_start_hand(&f.table_id, &3),
+        Err(Ok(VaultError::Version))
+    );
+    let expected_hand = f
+        .env
+        .as_contract(&f.vault, || identity::hand_id(&f.env, &f.table_id, 4));
+    assert_eq!(client.start_hand(&f.table_id, &4), expected_hand);
+}
+
+#[test]
+fn redeposit_rejects_liability_overflow_before_transfer() {
+    let f = fixture(2, 100);
+    let client = TableVaultClient::new(&f.env, &f.vault);
+    let mut proposal = f.proposal.clone();
+    proposal.nonce = BytesN::from_array(&f.env, &[93; 32]);
+    proposal.buy_ins = vec![&f.env, i128::MAX - 1, 1];
+    let table_id = client.create_table(&proposal);
+    let first = f.participants.get(0).unwrap().player;
+    let second = f.participants.get(1).unwrap().player;
+    token::StellarAssetClient::new(&f.env, &f.token).mint(&first, &(i128::MAX - 201));
+    client.deposit(&table_id, &first, &(i128::MAX - 1));
+    client.deposit(&table_id, &second, &1);
+    client.exit(&table_id, &second, &0);
+    let table_before = client.table(&table_id);
+    let backing_before = client.backing();
+    let second_before = token::TokenClient::new(&f.env, &f.token).balance(&second);
+
+    assert_eq!(
+        client.try_redeposit(&table_id, &second, &2, &1),
+        Err(Ok(VaultError::Amount))
+    );
+    assert_eq!(client.table(&table_id), table_before);
+    assert_eq!(client.backing(), backing_before);
+    assert_eq!(
+        token::TokenClient::new(&f.env, &f.token).balance(&second),
+        second_before
+    );
+}
+
+#[test]
+fn redeposit_supports_large_valid_i128_amount() {
+    let f = fixture(2, 100);
+    fund(&f);
+    let client = TableVaultClient::new(&f.env, &f.vault);
+    let player = f.participants.get(0).unwrap().player;
+    client.exit(&f.table_id, &player, &0);
+    let amount = i128::MAX - 100;
+    token::StellarAssetClient::new(&f.env, &f.token).mint(&player, &(i128::MAX - 300));
+
+    client.redeposit(&f.table_id, &player, &amount, &1);
+
+    assert_eq!(
+        client.table(&f.table_id).state.stacks,
+        vec![&f.env, amount, 100]
+    );
+    assert_eq!(client.table(&f.table_id).state.version, 2);
+    assert_eq!(client.backing().collateral, i128::MAX);
+    assert_eq!(client.backing().liabilities, i128::MAX);
+}
+
+#[test]
+fn redeposit_rejects_actual_version_overflow_without_mutation() {
+    let f = fixture(2, 100);
+    fund(&f);
+    let client = TableVaultClient::new(&f.env, &f.vault);
+    let player = f.participants.get(0).unwrap().player;
+    client.exit(&f.table_id, &player, &0);
+    f.env.as_contract(&f.vault, || {
+        let key = Key::Table(f.table_id.clone());
+        let mut table: Table = f.env.storage().persistent().get(&key).unwrap();
+        table.state.version = u64::MAX;
+        f.env.storage().persistent().set(&key, &table);
+    });
+    let table_before = client.table(&f.table_id);
+    let backing_before = client.backing();
+
+    assert_eq!(
+        client.try_redeposit(&f.table_id, &player, &50, &u64::MAX),
+        Err(Ok(VaultError::Version))
+    );
+    assert_eq!(client.table(&f.table_id), table_before);
+    assert_eq!(client.backing(), backing_before);
 }
