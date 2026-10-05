@@ -153,8 +153,7 @@ fn redeposit_authorization_cannot_cross_tables() {
     let vault_before = token_client.balance(&f.vault);
     f.env.set_auths(&[]);
 
-    assert!(
-        redeposit_with_tree(
+    assert!(redeposit_with_tree(
             &f,
             RedepositCall {
                 table: &f.table,
@@ -169,8 +168,7 @@ fn redeposit_authorization_cannot_cross_tables() {
                 amount: 50,
                 version: 1,
             },
-        )
-    );
+    ));
     assert_unchanged(
         &f,
         &other,
@@ -197,8 +195,7 @@ fn redeposit_authorization_cannot_cross_players_or_versions() {
     let vault_before = token_client.balance(&f.vault);
     f.env.set_auths(&[]);
 
-    assert!(
-        redeposit_with_tree(
+    assert!(redeposit_with_tree(
             &f,
             RedepositCall {
                 table: &f.table,
@@ -213,8 +210,7 @@ fn redeposit_authorization_cannot_cross_players_or_versions() {
                 amount: 50,
                 version: 2,
             },
-        )
-    );
+    ));
     assert_unchanged(
         &f,
         &f.table,
@@ -225,8 +221,7 @@ fn redeposit_authorization_cannot_cross_players_or_versions() {
         vault_before,
     );
 
-    assert!(
-        redeposit_with_tree(
+    assert!(redeposit_with_tree(
             &f,
             RedepositCall {
                 table: &f.table,
@@ -241,8 +236,7 @@ fn redeposit_authorization_cannot_cross_players_or_versions() {
                 amount: 50,
                 version: 2,
             },
-        )
-    );
+    ));
     assert_unchanged(
         &f,
         &f.table,
@@ -267,8 +261,7 @@ fn redeposit_nested_sac_transfer_must_match_the_authorized_tree() {
     let vault_before = token_client.balance(&f.vault);
     f.env.set_auths(&[]);
 
-    assert!(
-        redeposit_with_tree(
+    assert!(redeposit_with_tree(
             &f,
             RedepositCall {
                 table: &f.table,
@@ -283,8 +276,7 @@ fn redeposit_nested_sac_transfer_must_match_the_authorized_tree() {
                 amount: 50,
                 version: 1,
             },
-        )
-    );
+    ));
     assert_unchanged(
         &f,
         &f.table,
