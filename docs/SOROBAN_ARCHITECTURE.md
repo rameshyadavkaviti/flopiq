@@ -7,6 +7,8 @@ This document narrows the production architecture in `ARCHITECTURE.md` into the 
 
 Phase 2 proves the on-chain custody and settlement model **before** production wallet/CHIP integration and before MPC is connected.
 
+Implementation status note: this document remains the **target Phase 2 architecture**. Current merged `main` already contains local/test settlement types, state foundations, and a test-SAC-backed TableVault with authenticated allocation/deposit, version-bound hand start/settlement, bounded Ready-state full exit, and retained zero-stack redeposit. Those implementations validate parts of this design but do **not** make production custody, final settlement authority, Treasury/Rake, Cashier, MPC/fairness, or deployment complete. Section 10 is therefore a sequencing model, not an untouched backlog.
+
 ---
 
 ## 1. Security objective

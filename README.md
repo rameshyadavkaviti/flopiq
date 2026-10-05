@@ -81,7 +81,7 @@ The repository now includes an isolated Rust workspace at [`contracts/`](contrac
 - [`docs/SOROBAN_ARCHITECTURE.md`](docs/SOROBAN_ARCHITECTURE.md)
 - [`docs/SETTLEMENT_PROTOCOL.md`](docs/SETTLEMENT_PROTOCOL.md)
 
-These files define custody, replay/versioning, conservation, contract separation, and the canonical hand-settlement boundary before any real financial logic is implemented.
+These files define custody, replay/versioning, conservation, contract separation, and the canonical hand-settlement boundary. Merged Phase 2 code now implements local/test financial state transitions around that boundary, including test-SAC-backed TableVault custody behavior; this is still not production custody or final settlement authority.
 
 Architecture, implementation order, security constraints, and cost/data strategy are documented in [`docs/`](docs/).
 
