@@ -154,20 +154,20 @@ fn redeposit_authorization_cannot_cross_tables() {
     f.env.set_auths(&[]);
 
     assert!(redeposit_with_tree(
-            &f,
-            RedepositCall {
-                table: &f.table,
-                player: &player,
-                amount: 50,
-                version: 1,
-            },
-            50,
-            RedepositCall {
-                table: &other,
-                player: &player,
-                amount: 50,
-                version: 1,
-            },
+        &f,
+        RedepositCall {
+            table: &f.table,
+            player: &player,
+            amount: 50,
+            version: 1,
+        },
+        50,
+        RedepositCall {
+            table: &other,
+            player: &player,
+            amount: 50,
+            version: 1,
+        },
     ));
     assert_unchanged(
         &f,
@@ -196,20 +196,20 @@ fn redeposit_authorization_cannot_cross_players_or_versions() {
     f.env.set_auths(&[]);
 
     assert!(redeposit_with_tree(
-            &f,
-            RedepositCall {
-                table: &f.table,
-                player: &first,
-                amount: 50,
-                version: 2,
-            },
-            50,
-            RedepositCall {
-                table: &f.table,
-                player: &second,
-                amount: 50,
-                version: 2,
-            },
+        &f,
+        RedepositCall {
+            table: &f.table,
+            player: &first,
+            amount: 50,
+            version: 2,
+        },
+        50,
+        RedepositCall {
+            table: &f.table,
+            player: &second,
+            amount: 50,
+            version: 2,
+        },
     ));
     assert_unchanged(
         &f,
@@ -222,20 +222,20 @@ fn redeposit_authorization_cannot_cross_players_or_versions() {
     );
 
     assert!(redeposit_with_tree(
-            &f,
-            RedepositCall {
-                table: &f.table,
-                player: &second,
-                amount: 50,
-                version: 1,
-            },
-            50,
-            RedepositCall {
-                table: &f.table,
-                player: &second,
-                amount: 50,
-                version: 2,
-            },
+        &f,
+        RedepositCall {
+            table: &f.table,
+            player: &second,
+            amount: 50,
+            version: 1,
+        },
+        50,
+        RedepositCall {
+            table: &f.table,
+            player: &second,
+            amount: 50,
+            version: 2,
+        },
     ));
     assert_unchanged(
         &f,
@@ -262,20 +262,20 @@ fn redeposit_nested_sac_transfer_must_match_the_authorized_tree() {
     f.env.set_auths(&[]);
 
     assert!(redeposit_with_tree(
-            &f,
-            RedepositCall {
-                table: &f.table,
-                player: &player,
-                amount: 50,
-                version: 1,
-            },
-            49,
-            RedepositCall {
-                table: &f.table,
-                player: &player,
-                amount: 50,
-                version: 1,
-            },
+        &f,
+        RedepositCall {
+            table: &f.table,
+            player: &player,
+            amount: 50,
+            version: 1,
+        },
+        49,
+        RedepositCall {
+            table: &f.table,
+            player: &player,
+            amount: 50,
+            version: 1,
+        },
     ));
     assert_unchanged(
         &f,
