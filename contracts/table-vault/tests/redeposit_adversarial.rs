@@ -1,5 +1,7 @@
 use flopiq_settlement_types::Participant;
-use flopiq_table_vault::{Backing, TableProposal, TableVault, TableVaultArgs, TableVaultClient, VaultError};
+use flopiq_table_vault::{
+    Backing, TableProposal, TableVault, TableVaultArgs, TableVaultClient, VaultError,
+};
 use soroban_sdk::{
     Address, BytesN, Env, IntoVal, Vec,
     testutils::{Address as _, MockAuth, MockAuthInvoke},
