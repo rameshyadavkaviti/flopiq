@@ -12,6 +12,9 @@ designed for local contract tests, not deployment with real player funds.
 - `exit(table_id, player, version)` returns that player's entire balance while
   the table is `Ready`, reduces liability by the exact same amount, and advances
   the committed version once under that player's authorization.
+- `redeposit(table_id, player, amount, version)` restores a positive SAC balance
+  only for an existing retained participant whose `Ready`-table stack is exactly
+  zero. It advances the committed version once under that player's authorization.
 - `start_hand(table_id, version)` requires unanimous consent and derives a
   domain-separated hand ID from the table and committed version.
 - `commit(settlement)` requires the active hand, shared settlement validation,
@@ -39,15 +42,21 @@ same exact amount. Conserved zero-rake settlements change stack ownership but no
 liabilities. A full exit decreases the player's stack, aggregate liability, and
 selected-SAC collateral by the same exact amount. Direct selected-token transfers
 become explicit surplus and never player credit. Other tokens are ignored. A
-clawback-induced deficit blocks hand start, settlement, and further deposits.
+zero-stack redeposit increases that player's stack, aggregate liability, and
+selected-SAC collateral by the same positive amount without changing existing
+surplus. A clawback-induced deficit blocks hand start, settlement, deposits, and
+redeposits; new player funds cannot recapitalize an already insolvent vault.
 
 ## Authorization and storage
 
 Allocation, hand start, and settlement use unanimous participant `require_auth`.
 Deposit authorization is player-specific and its authorization tree includes the
 nested SAC transfer. Exit authorization is also player-specific; no backend or
-administrator can release another participant's balance. Failed invocations roll
-back contract storage and token moves.
+administrator can release another participant's balance. Redeposit likewise
+requires only the exact retained player and transfers only the immutable bound
+SAC. It validates solvency and checked arithmetic before transfer, verifies the
+exact collateral increase, and then commits stack, liabilities, and one version
+increment. Failed invocations roll back contract storage and token moves.
 
 Tables, aggregate liabilities, and consumed-hand markers use persistent storage.
 The configured token uses instance storage. Archived entries must be restored and
@@ -59,10 +68,13 @@ allowing replay or loss of table ownership.
 Exit is deliberately only a full financial exit from `Ready`, not a complete
 leave-table lifecycle. The participant and seat remain allocated with a zero
 stack, the table remains `Ready`, and another hand cannot start while any retained
-participant has zero liability. Sequential and final exits are supported. There
-is no redeposit, re-entry, participant removal, seat reassignment, table closure,
-cashier, rake, treasury, token conversion, upgrade, administrator, timeout, MPC,
-or production fairness proof. The two settlement digests remain opaque
-commitments. Unanimous consent prevents unilateral backend movement but permits
-participant refusal, which is a known development-liveness tradeoff rather than
-the final Phase 6 authorization design.
+participant has zero liability. A redeposit repairs only that retained zero-stack
+state; positive-stack top-ups, new participants, and seat or ordering changes are
+rejected. Any positive valid `i128` amount is accepted because the completed table
+does not retain original buy-ins. Production buy-in/rebuy limits remain deferred.
+There is no re-entry after removal, participant removal, seat reassignment, table
+closure, cashier, rake, treasury, token conversion, upgrade, administrator,
+timeout, MPC, or production fairness proof. The two settlement digests remain
+opaque commitments. Unanimous consent prevents unilateral backend movement but
+permits participant refusal, which is a known development-liveness tradeoff rather
+than the final Phase 6 authorization design.

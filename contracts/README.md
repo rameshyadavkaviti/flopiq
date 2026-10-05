@@ -79,21 +79,24 @@ restored, not treated as absent; automatic/manual restoration and TTL maintenanc
 are operational requirements before deployment. This slice has no TTL service.
 
 `table-vault` adds authenticated table allocation, exact one-time deposits into
-one immutable SAC, version-bound hand allocation, conserved settlement, and exact
-full-balance exits from `Ready`. See [table-vault/README.md](table-vault/README.md)
-for its API and threat boundary.
+one immutable SAC, version-bound hand allocation, conserved settlement, exact
+full-balance exits from `Ready`, and player-authorized redeposit for retained
+zero-stack participants. See [table-vault/README.md](table-vault/README.md) for its
+API and threat boundary.
 
 ## Limitations and next boundary
 
 The original `table-state` contract remains a local state-only test foundation.
-The vault has no partial withdrawal, redeposit, re-entry, participant replacement,
-seat reassignment, table closure, timeout, admin, upgrade, treasury, or cashier
-path. A full exit retains the participant with zero liability and prevents another
-hand from starting. Its unanimous participant consent model is safe for local
-development but has a deliberate liveness limitation: any player can refuse to
-start or settle a hand. Final fairness/threshold authorization is still Phase 6.
-Issuer clawback can make a vault insolvent; the vault detects that condition and
-blocks financial transitions, but cannot repair it.
+The vault has no partial withdrawal, positive-stack rebuy, re-entry after removal,
+participant replacement, seat reassignment, table closure, timeout, admin,
+upgrade, treasury, or cashier path. A full exit retains the participant with zero
+liability and prevents another hand from starting until each zero-stack member
+redeposits. Redeposit accepts any positive valid test-SAC `i128`; production
+buy-in/rebuy policy is deferred. Its unanimous hand-start/settlement consent model
+is safe for local development but has a deliberate liveness limitation. Final
+fairness/threshold authorization is still Phase 6. Issuer clawback can make a
+vault insolvent; the vault detects that condition and blocks financial transitions,
+including redeposit before player funds move, but cannot repair the deficit.
 
 Architecture: [Soroban](../docs/SOROBAN_ARCHITECTURE.md),
 [settlement protocol](../docs/SETTLEMENT_PROTOCOL.md),

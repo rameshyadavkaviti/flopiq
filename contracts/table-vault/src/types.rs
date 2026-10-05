@@ -54,11 +54,23 @@ pub enum VaultError {
     Insolvent = 11,
     Storage = 12,
     NoLiability = 13,
+    ExistingLiability = 14,
 }
 
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Exited {
+    #[topic]
+    pub table_id: BytesN<32>,
+    #[topic]
+    pub player: Address,
+    pub amount: i128,
+    pub next_state_version: u64,
+}
+
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Redeposited {
     #[topic]
     pub table_id: BytesN<32>,
     #[topic]
